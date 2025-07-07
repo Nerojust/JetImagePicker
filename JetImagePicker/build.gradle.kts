@@ -40,6 +40,13 @@ android {
     kotlin {
         jvmToolchain(11)
     }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar() // Optional: adds empty javadoc.jar if you don’t have one
+        }
+    }
 }
 
 afterEvaluate {
