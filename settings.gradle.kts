@@ -22,4 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "JetImagePicker"
 include(":app")
- 
+include(":JetImagePicker")
