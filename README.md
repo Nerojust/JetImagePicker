@@ -4,14 +4,14 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 ---
 
-## 🚀 Features
+## Features
 
-✅ Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
-✅ Supports Camera and Gallery
-✅ Clean handling of runtime permissions – even on Android 13+
-✅ Supports multiple image selection and compression
-✅ Provides structured result callbacks for success and error handling
-✅ Just works – no hidden setup, no ActivityResultContracts, and no more permission nightmares!
+1. Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
+2. Supports Camera and Gallery.
+3. Clean handling of runtime permissions – even on Android 13+
+4. Supports multiple image selection and compression
+5. Provides structured result callbacks for success and error handling
+6. Just works – no hidden setup, no ActivityResultContracts, and no more permission nightmares!
 
 ---
 
