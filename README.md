@@ -169,4 +169,4 @@ Made with 💙 by [NeroJust](https://github.com/NeroJust)
 
 ## 📄 License
 
-MIT License. See [LICENSE](./LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details.
