@@ -27,7 +27,12 @@ OR
 
 implementation("com.github.nerojust:JetImagePicker:v1")
 
+
 ```
+
+repositories {
+    maven("https://jitpack.io")
+}
 ---
 
 ## 🧱 Usage
@@ -168,7 +173,7 @@ Contributions are welcome! Open issues, submit PRs, or suggest ideas.
 
 ## 🧑‍💻 Author
 
-Made with 💙 by [NeroJust](https://github.com/NeroJust)
+Made with 💙 by [Nerojust](https://github.com/Nerojust)
 
 ---
 
