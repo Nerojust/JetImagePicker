@@ -31,7 +31,6 @@ implementation("com.github.nerojust:JetImagePicker:v1")
 ```
 2. **Add to your settings.gradle**:
 
-If using as a module:
 ```kotlin
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
