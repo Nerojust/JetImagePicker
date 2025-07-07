@@ -22,6 +22,11 @@ A modern, Jetpack Compose-ready image picker library for Android.
 If using as a module:
 ```kotlin
 implementation(project(":JetImagePicker"))
+
+OR
+
+implementation("com.github.nerojust:JetImagePicker:v1")
+
 ```
 ---
 
