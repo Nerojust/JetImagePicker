@@ -64,5 +64,5 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.coil.compose)
 //    implementation(project(":JetImagePicker"))
-    implementation("com.github.nerojust:JetImagePicker:v1")
+    implementation(libs.jetimagepicker)
 }

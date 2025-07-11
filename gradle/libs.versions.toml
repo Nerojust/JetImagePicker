@@ -1,5 +1,6 @@
 [versions]
 agp = "8.6.0"
+jetimagepicker = "v1"
 kotlin = "2.2.0"
 composeCompiler = "1.5.13"
 coreKtx = "1.16.0"
@@ -17,6 +18,7 @@ junitJunit = "4.12"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+jetimagepicker = { module = "com.github.nerojust:JetImagePicker", version.ref = "jetimagepicker" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
