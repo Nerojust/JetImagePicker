@@ -76,6 +76,9 @@ dependencyResolutionManagement {
 
 ---
 
+![jetimagepicker](https://github.com/user-attachments/assets/5b2b47a9-506a-4ba0-b980-091302e94ca0)
+
+
 ## 🧩 Example
 
 ### ✅ Image Picker Screen
