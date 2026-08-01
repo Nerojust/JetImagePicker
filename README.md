@@ -1,7 +1,7 @@
 # 📸 JetImagePicker
 
 [![CI](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml/badge.svg)](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.nerojust/jetimagepicker.svg)](https://central.sonatype.com/artifact/io.github.nerojust/jetimagepicker)
+[![JitPack](https://jitpack.io/v/Nerojust/JetImagePicker.svg)](https://jitpack.io/#Nerojust/JetImagePicker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A modern, Jetpack Compose-ready image picker library for Android.
@@ -21,11 +21,23 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 ## 🛠️ Setup
 
-**Add the dependency:**
+**1. Add the JitPack repository** to your `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+**2. Add the dependency**, using a released tag from the [Releases](https://github.com/Nerojust/JetImagePicker/releases) page (or see the badge above for the latest):
 
 ```kotlin
 dependencies {
-    implementation("io.github.nerojust:jetimagepicker:1.0.0")
+    implementation("com.github.nerojust:JetImagePicker:v1.0.0")
 }
 ```
 
@@ -34,8 +46,6 @@ Or, if you're working inside this repo as a module:
 ```kotlin
 implementation(project(":JetImagePicker"))
 ```
-
-No extra repository declaration is needed — the artifact is published to Maven Central.
 
 ---
 

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The example `app` module now depends on the local `JetImagePicker` module source instead of a published artifact.
 - README usage example now matches the current API in context (disables pick buttons while `isLoading`, includes the `clearSelection` button) instead of documenting `isLoading`/`clearSelection` in a separate, disconnected section; corrected a stale "even on Android 13+" permission claim.
 - `CONTRIBUTING.md` corrected to describe the detekt baseline as a one-time snapshot rather than something that grandfathers ongoing issues.
+- Distribution: settled on JitPack (`com.github.nerojust:JetImagePicker`) as the actual, verifiable distribution path for now — neither it nor Maven Central (`io.github.nerojust:jetimagepicker`, still configured in `build.gradle.kts` for a possible future publish) had ever actually been published; JitPack needs no external account/signing setup and works directly off a pushed git tag.
 
 ### Fixed
 - Compressed images are now returned as `FileProvider` URIs instead of raw `file://` URIs, avoiding `FileUriExposedException` on API 24+.
