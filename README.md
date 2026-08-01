@@ -71,8 +71,8 @@ Gallery picking uses Android's Photo Picker and needs **no storage permission**.
 ```
 
 ---
-![jetimagepicker](<img width="1080" height="2340" alt="image" src="https://github.com/user-attachments/assets/c7ed5901-1666-48db-92b2-5cb5153e588c" />)
 
+<img width="1080" height="2340" alt="JetImagePicker screenshot" src="https://github.com/user-attachments/assets/c7ed5901-1666-48db-92b2-5cb5153e588c" />
 
 ## 🧩 Example
 
