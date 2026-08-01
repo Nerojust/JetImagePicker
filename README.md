@@ -233,6 +233,41 @@ sealed class ImagePickerResult {
 
 ---
 
+## 🐛 Common Gotchas
+
+### "Why do I get three different permission results instead of just `Denied`?"
+
+Because Android's permission model has main-character energy and never keeps it simple. Here's what's actually happening, step by step:
+
+1. **First-ever ask, user taps "Deny"** → you get `ShowRationale`. Android's take: *"They said no, but you can ask again — maybe explain yourself first this time."* Show a small dialog explaining why you need the permission, then call `pickFromGallery`/`captureWithCamera` again.
+2. **Asked before, denied again, OS still willing to listen** → `PermissionDenied`. Same energy as above — not fatal, just mildly rude. Let the user retry.
+3. **User checked "Don't ask again," or the OS has simply had enough of this conversation** → `PermissionPermanentlyDenied`. This is Android saying *"we are not doing this a third time."* Your only move now is Settings:
+
+```kotlin
+is ImagePickerResult.PermissionPermanentlyDenied -> {
+    context.startActivity(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+        }
+    )
+}
+```
+
+This whole dance is **camera-only**, by the way — gallery picking goes through Android's Photo Picker, which asks for no permission at all. One less state to lose sleep over.
+
+### "I set `targetWidth` but nothing got resized"
+
+`targetWidth` and `targetHeight` are a matched set — set one without the other and the library quietly does nothing (no crash, no log, no resizing, just vibes). Bring both or bring neither:
+
+```kotlin
+JetImagePickerConfig(
+    targetWidth = 1024,
+    targetHeight = 1024 // <- skip this and targetWidth silently does nothing
+)
+```
+
+---
+
 ## ❤️ Contributions
 
 Contributions are welcome! Open issues, submit PRs, or suggest ideas.
