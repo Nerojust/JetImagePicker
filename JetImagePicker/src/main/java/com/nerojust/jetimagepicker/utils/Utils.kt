@@ -1,4 +1,3 @@
-// File: utils/Utils.kt
 package com.nerojust.jetimagepicker.utils
 
 import android.content.Context
@@ -10,51 +9,93 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.core.graphics.scale
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
+/**
+ * Internal file/image helpers backing [rememberImagePickerLauncher]. Not intended for direct use by consumers.
+ */
 object Utils {
-
-    /**
-     * Compress an image from its [Uri] and return the file pointing to the compressed image.
-     */
+    /** Creates a new empty cache file for a camera capture and returns its [FileProvider] URI. */
     fun createImageUri(context: Context): Uri {
-        val file = File(
-            context.cacheDir,
-            "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.jpg"
-        )
+        val file =
+            File(
+                context.cacheDir,
+                "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.jpg",
+            )
         return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
     }
 
-    fun compressImage(
+    fun calculateScaledDimensions(
+        srcWidth: Int,
+        srcHeight: Int,
+        maxWidth: Int,
+        maxHeight: Int,
+    ): Pair<Int, Int> {
+        if (srcWidth <= 0 || srcHeight <= 0) return srcWidth to srcHeight
+
+        val widthRatio = maxWidth.toFloat() / srcWidth
+        val heightRatio = maxHeight.toFloat() / srcHeight
+        val scale = minOf(widthRatio, heightRatio, 1f)
+
+        val newWidth = (srcWidth * scale).toInt().coerceAtLeast(1)
+        val newHeight = (srcHeight * scale).toInt().coerceAtLeast(1)
+        return newWidth to newHeight
+    }
+
+    /**
+     * Compresses (and optionally resizes) the image at [uri], writing the result
+     * to a cache file exposed via [FileProvider]. Runs on [Dispatchers.IO].
+     */
+    suspend fun compressImage(
         context: Context,
         uri: Uri,
-        config: JetImagePickerConfig
-    ): Uri? = try {
-        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val source = ImageDecoder.createSource(context.contentResolver, uri)
-            ImageDecoder.decodeBitmap(source)
-        } else {
-            MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-        }
+        config: JetImagePickerConfig,
+    ): Uri? =
+        withContext(Dispatchers.IO) {
+            try {
+                val bitmap =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        val source = ImageDecoder.createSource(context.contentResolver, uri)
+                        ImageDecoder.decodeBitmap(source)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    }
 
-        val resized = config.targetWidth?.let { width ->
-            config.targetHeight?.let { height ->
-                bitmap.scale(width, height)
+                val targetWidth = config.targetWidth
+                val targetHeight = config.targetHeight
+                val resized =
+                    if (targetWidth != null && targetHeight != null) {
+                        val (scaledWidth, scaledHeight) =
+                            calculateScaledDimensions(
+                                bitmap.width,
+                                bitmap.height,
+                                targetWidth,
+                                targetHeight,
+                            )
+                        bitmap.scale(scaledWidth, scaledHeight)
+                    } else {
+                        bitmap
+                    }
+
+                // A timestamp alone can collide when compressing several images in the same
+                // millisecond (e.g. multi-select), silently overwriting one with another.
+                val file = File(context.cacheDir, "COMP_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+                FileOutputStream(file).use {
+                    resized.compress(Bitmap.CompressFormat.JPEG, config.compressionQuality, it)
+                }
+
+                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
             }
-        } ?: bitmap
-
-        val file = File(context.cacheDir, "COMP_${System.currentTimeMillis()}.jpg")
-        FileOutputStream(file).use {
-            resized.compress(Bitmap.CompressFormat.JPEG, config.compressionQuality, it)
         }
-
-        Uri.fromFile(file)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
 }

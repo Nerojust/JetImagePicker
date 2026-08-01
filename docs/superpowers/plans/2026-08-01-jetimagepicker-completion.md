@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix JetImagePicker's real bugs, migrate gallery picking to Android's Photo Picker, add the missing loading/reset API, and make the library actually publishable (docs, tests, CI).
+**Goal:** Fix JetImagePicker's real bugs, migrate gallery picking to Android's Photo Picker, add the missing loading/reset API, and bring it to the tooling/process bar expected of a public Android library (static analysis, KDoc, changelog, contribution guide, CI, dependency automation).
 
 **Architecture:** No structural rewrite — this is a focused bug-fix + modernization pass over the existing small module structure (`config/`, `launchers/`, `model/`, `result/`, `state/`, `ui/`, `utils/`). Pure logic (scaling math, permission→result mapping) gets pulled into small testable functions; Android-framework-coupled code (permission checks, activity result contracts) stays where it is since it can't be unit-tested without Robolectric, which is not being added for this pass.
 
@@ -18,33 +18,70 @@
 
 ---
 
-### Task 1: Remove unedited template stub tests
+### Task 1: Fix example app's library dependency, remove unedited template stub tests
 
 **Files:**
+- Modify: `app/build.gradle.kts`
+- Modify: `gradle/libs.versions.toml`
 - Delete: `JetImagePicker/src/test/java/com/nerojust/jetimagepicker/ExampleUnitTest.kt`
 - Delete: `JetImagePicker/src/androidTest/java/com/nerojust/jetimagepicker/ExampleInstrumentedTest.kt`
 - Delete: `app/src/test/java/com/nerojust/jetimagepicker/ExampleUnitTest.kt`
 - Delete: `app/src/androidTest/java/com/nerojust/jetimagepicker/ExampleInstrumentedTest.kt`
 
-**Interfaces:** None — these files have no consumers.
+**Interfaces:** None — these are build-config and housekeeping changes with no consumers.
 
-- [ ] **Step 1: Delete the four stub files**
+**Why the dependency fix matters:** `app/build.gradle.kts` currently has `implementation(project(":JetImagePicker"))` commented out and instead depends on `implementation(libs.jetimagepicker)` — the *published* JitPack artifact (`com.github.nerojust:JetImagePicker:v1`). This means the example app currently builds against a stale published jar, not this repo's own library source. Every later task in this plan verifies its changes by running `./gradlew :app:assembleDebug` — that check is meaningless until the app actually consumes local source.
+
+- [ ] **Step 1: Point the app module at the local library module**
+
+In `app/build.gradle.kts`, replace:
+
+```kotlin
+//    implementation(project(":JetImagePicker"))
+    implementation(libs.jetimagepicker)
+```
+
+with:
+
+```kotlin
+    implementation(project(":JetImagePicker"))
+```
+
+- [ ] **Step 2: Remove the now-unused catalog entry**
+
+In `gradle/libs.versions.toml`, remove the now-unreferenced version and library entries:
+
+```toml
+jetimagepicker = "v1"
+```
+
+(from `[versions]`), and:
+
+```toml
+jetimagepicker = { module = "com.github.nerojust:JetImagePicker", version.ref = "jetimagepicker" }
+```
+
+(from `[libraries]`).
+
+- [ ] **Step 3: Verify the project still builds against local source**
+
+Run: `./gradlew :JetImagePicker:assembleDebug :app:assembleDebug`
+Expected: BUILD SUCCESSFUL
+
+- [ ] **Step 4: Commit the dependency fix**
+
+```bash
+git add app/build.gradle.kts gradle/libs.versions.toml
+git commit -m "fix: app example depends on local JetImagePicker module, not stale published artifact"
+```
+
+- [ ] **Step 5: Delete the four unedited stub test files and commit**
 
 ```bash
 git rm JetImagePicker/src/test/java/com/nerojust/jetimagepicker/ExampleUnitTest.kt
 git rm JetImagePicker/src/androidTest/java/com/nerojust/jetimagepicker/ExampleInstrumentedTest.kt
 git rm app/src/test/java/com/nerojust/jetimagepicker/ExampleUnitTest.kt
 git rm app/src/androidTest/java/com/nerojust/jetimagepicker/ExampleInstrumentedTest.kt
-```
-
-- [ ] **Step 2: Verify the project still builds**
-
-Run: `./gradlew :JetImagePicker:assembleDebug :app:assembleDebug`
-Expected: BUILD SUCCESSFUL
-
-- [ ] **Step 3: Commit**
-
-```bash
 git commit -m "test: remove unedited Android Studio template stub tests"
 ```
 
@@ -1097,3 +1134,463 @@ Expected: all three succeed.
 git add .github/workflows/android-ci.yml
 git commit -m "ci: add GitHub Actions workflow for lint, unit tests, and assemble"
 ```
+
+---
+
+### Task 12: ktlint + detekt static analysis, wired into CI
+
+**Files:**
+- Modify: `build.gradle.kts` (root)
+- Modify: `gradle/libs.versions.toml`
+- Modify: `JetImagePicker/build.gradle.kts`
+- Modify: `app/build.gradle.kts`
+- Modify: `.github/workflows/android-ci.yml`
+- Create: `JetImagePicker/detekt-baseline.xml` (generated, not hand-written)
+- Create: `app/detekt-baseline.xml` (generated, not hand-written)
+- Any file reformatted by `ktlintFormat` (formatting-only changes)
+
+**Interfaces:** None — build tooling only, no source-level API changes.
+
+- [ ] **Step 1: Add the plugin versions and aliases to the catalog**
+
+In `gradle/libs.versions.toml`, add to `[versions]`:
+
+```toml
+ktlint = "12.1.1"
+detekt = "1.23.6"
+```
+
+Add to `[plugins]`:
+
+```toml
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+```
+
+- [ ] **Step 2: Apply both plugins at the root**
+
+In `build.gradle.kts` (root), add to the `plugins { }` block:
+
+```kotlin
+    alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt) apply false
+```
+
+- [ ] **Step 3: Apply and configure both plugins in `JetImagePicker/build.gradle.kts`**
+
+Add to its `plugins { }` block:
+
+```kotlin
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
+```
+
+Add this block after the `dependencies { }` block:
+
+```kotlin
+detekt {
+    buildUponDefaultConfig = true
+    baseline = file("detekt-baseline.xml")
+}
+```
+
+- [ ] **Step 4: Apply and configure both plugins in `app/build.gradle.kts`**
+
+Add to its `plugins { }` block:
+
+```kotlin
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
+```
+
+Add this block after the `dependencies { }` block:
+
+```kotlin
+detekt {
+    buildUponDefaultConfig = true
+    baseline = file("detekt-baseline.xml")
+}
+```
+
+- [ ] **Step 5: Auto-format the existing codebase**
+
+Run: `./gradlew ktlintFormat`
+Expected: completes successfully; any changed files are formatting-only (whitespace, import order) — confirm with `git diff --stat` that no logic changed.
+
+- [ ] **Step 6: Verify formatting is now clean**
+
+Run: `./gradlew ktlintCheck`
+Expected: BUILD SUCCESSFUL
+
+- [ ] **Step 7: Generate detekt baselines to grandfather existing findings**
+
+This is the standard way to adopt detekt on a codebase that predates it: the baseline captures every current finding so only *new* issues fail CI going forward.
+
+Run: `./gradlew :JetImagePicker:detektBaseline :app:detektBaseline`
+Expected: BUILD SUCCESSFUL; creates `JetImagePicker/detekt-baseline.xml` and `app/detekt-baseline.xml`.
+
+- [ ] **Step 8: Verify detekt now passes clean**
+
+Run: `./gradlew detekt`
+Expected: BUILD SUCCESSFUL
+
+- [ ] **Step 9: Add static analysis steps to CI**
+
+In `.github/workflows/android-ci.yml`, insert these steps after "Lint" and before "Unit tests":
+
+```yaml
+      - name: Ktlint
+        run: ./gradlew ktlintCheck
+
+      - name: Detekt
+        run: ./gradlew detekt
+```
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add build.gradle.kts gradle/libs.versions.toml JetImagePicker/build.gradle.kts app/build.gradle.kts .github/workflows/android-ci.yml JetImagePicker/detekt-baseline.xml app/detekt-baseline.xml
+git add -u
+git commit -m "chore: add ktlint and detekt static analysis, wired into CI"
+```
+
+---
+
+### Task 13: KDoc on the public API
+
+**Files:**
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/config/JetImagePickerConfig.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/model/PermissionState.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/result/ImagePickerResult.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/state/JetImagePickerState.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/state/rememberJetImagePickerState.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/launchers/ImagePickerLauncher.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/ui/ImagePreview.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/ui/MultiImagePreview.kt`
+- Modify: `JetImagePicker/src/main/java/com/nerojust/jetimagepicker/utils/Utils.kt`
+
+**Interfaces:** None — doc comments only, no signature changes. This task must run after Tasks 1-9 since it documents the signatures those tasks produce; `PermissionResultMapper.kt` (Task 3) and `Utils.calculateScaledDimensions`/`compressImage` (Tasks 2, 5) already carry KDoc from when they were written and need no changes here.
+
+- [ ] **Step 1: `JetImagePickerConfig.kt`**
+
+Add directly above `data class JetImagePickerConfig(`:
+
+```kotlin
+/**
+ * Configuration for [rememberJetImagePickerState] and [rememberImagePickerLauncher].
+ *
+ * @property enableCompression If true, picked/captured images are compressed (and optionally resized) before the result callback fires.
+ * @property compressionQuality JPEG quality (0-100) used when [enableCompression] is true.
+ * @property targetWidth Optional max width (px) to fit picked images into, preserving aspect ratio. Requires [targetHeight] to also be set.
+ * @property targetHeight Optional max height (px) to fit picked images into, preserving aspect ratio. Requires [targetWidth] to also be set.
+ * @property allowMultiple If true, the gallery picker allows selecting more than one image.
+ */
+```
+
+- [ ] **Step 2: `PermissionState.kt`**
+
+Add directly above `data class PermissionState(`:
+
+```kotlin
+/**
+ * Snapshot of a single runtime permission's state, computed after a permission request.
+ *
+ * @property permission The Android permission string this state describes (e.g. `android.Manifest.permission.CAMERA`).
+ * @property isGranted True if the permission is currently granted.
+ * @property isDenied True if the permission was denied this round (may still be re-requestable).
+ * @property isPermanentlyDenied True if the user denied the permission with "Don't ask again", or the system otherwise stopped prompting.
+ * @property shouldShowRationale True if the OS recommends showing a rationale before requesting again.
+ */
+```
+
+- [ ] **Step 3: `ImagePickerResult.kt`**
+
+Add directly above `sealed class ImagePickerResult {`:
+
+```kotlin
+/**
+ * Result of a pick/capture operation, delivered via [rememberJetImagePickerState]'s `onResult` callback.
+ */
+```
+
+Add directly above each nested data class:
+
+```kotlin
+    /** One or more images were successfully picked or captured. */
+    data class Success(val uris: List<Uri>) : ImagePickerResult()
+
+    /** [permission] was denied for this request; it can still be requested again. */
+    data class PermissionDenied(val permission: String) : ImagePickerResult()
+
+    /** [permission] was permanently denied ("Don't ask again"); direct the user to app settings. */
+    data class PermissionPermanentlyDenied(val permission: String) : ImagePickerResult()
+
+    /** The OS recommends showing a rationale for [permission] before requesting it again. */
+    data class ShowRationale(val permission: String) : ImagePickerResult()
+```
+
+- [ ] **Step 4: `JetImagePickerState.kt`**
+
+Add directly above `class JetImagePickerState internal constructor(`:
+
+```kotlin
+/**
+ * Observable state for a single image picker instance, returned by [rememberJetImagePickerState].
+ *
+ * @property selectedImageUris All currently selected/captured image URIs.
+ * @property selectedImageUri The first URI in [selectedImageUris], or null if nothing is selected.
+ * @property isLoading True while picked images are being compressed.
+ * @property pickFromGallery Launches the gallery picker (Photo Picker on supported devices).
+ * @property captureWithCamera Launches the system camera to capture a new photo.
+ * @property clearSelection Resets [selectedImageUris]/[selectedImageUri] to empty.
+ */
+```
+
+- [ ] **Step 5: `rememberJetImagePickerState.kt`**
+
+Add directly above `fun rememberJetImagePickerState(`:
+
+```kotlin
+/**
+ * Creates and remembers a [JetImagePickerState] for picking images from the gallery or capturing
+ * one with the camera, handling runtime permissions and optional compression.
+ *
+ * @param context Must be (or wrap) an [android.app.Activity].
+ * @param config Picker behavior — compression, resizing, single vs. multiple selection.
+ * @param onResult Invoked with an [ImagePickerResult] on every pick, capture, or permission event.
+ */
+```
+
+- [ ] **Step 6: `ImagePickerLauncher.kt`**
+
+Add directly above `fun rememberImagePickerLauncher(`:
+
+```kotlin
+/**
+ * Sets up the gallery and camera activity-result launchers backing [rememberJetImagePickerState].
+ * Gallery picking uses Android's Photo Picker contracts and requires no storage permission;
+ * camera capture requests `android.Manifest.permission.CAMERA` at runtime.
+ *
+ * @return A pair of (launchGallery, launchCamera) functions.
+ */
+```
+
+- [ ] **Step 7: `ImagePreview.kt`**
+
+Add directly above `fun ImagePreview(`:
+
+```kotlin
+/**
+ * Displays a single selected image at a fixed 250dp height, cropped to fill the width.
+ */
+```
+
+- [ ] **Step 8: `MultiImagePreview.kt`**
+
+Add directly above `fun MultiImagePreview(`:
+
+```kotlin
+/**
+ * Displays a horizontally scrolling row of selected images, each 120dp square.
+ */
+```
+
+- [ ] **Step 9: `Utils.kt`**
+
+Add directly above `object Utils {`:
+
+```kotlin
+/**
+ * Internal file/image helpers backing [rememberImagePickerLauncher]. Not intended for direct use by consumers.
+ */
+```
+
+Add directly above `fun createImageUri(context: Context): Uri {`:
+
+```kotlin
+    /** Creates a new empty cache file for a camera capture and returns its [FileProvider] URI. */
+```
+
+- [ ] **Step 10: Verify the module still builds and tests still pass**
+
+Run: `./gradlew :JetImagePicker:assembleDebug :JetImagePicker:testDebugUnitTest :app:assembleDebug`
+Expected: BUILD SUCCESSFUL, all unit tests PASS
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add JetImagePicker/src/main/java/com/nerojust/jetimagepicker/
+git commit -m "docs: add KDoc to the public API"
+```
+
+---
+
+### Task 14: CHANGELOG.md
+
+**Files:**
+- Create: `CHANGELOG.md`
+
+**Interfaces:** None — documentation only.
+
+- [ ] **Step 1: Create the changelog**
+
+```markdown
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.0.0] - 2026-08-01
+
+### Added
+- `JetImagePickerState.isLoading` — true while picked images are being compressed.
+- `JetImagePickerState.clearSelection()` — resets the current selection.
+- Unit tests for config defaults, aspect-ratio scaling, and permission-to-result mapping.
+- GitHub Actions CI (lint, ktlint, detekt, unit tests, assemble).
+- ktlint and detekt static analysis.
+- KDoc on the public API.
+
+### Changed
+- Gallery picking now uses Android's Photo Picker (`PickVisualMedia`/`PickMultipleVisualMedia`) instead of a custom `ACTION_PICK` contract — no storage runtime permission is required anymore.
+- Image compression now runs off the main thread and preserves aspect ratio instead of stretching to the exact target size.
+- `ImagePickerResult` moved to its correct `result` package (was misplaced under `model`).
+- The example `app` module now depends on the local `JetImagePicker` module source instead of a published artifact.
+
+### Fixed
+- Compressed images are now returned as `FileProvider` URIs instead of raw `file://` URIs, avoiding `FileUriExposedException` on API 24+.
+- Selected images and an in-flight camera capture now survive rotation and process death (previously lost via plain `remember`).
+- Stale compressed/temp cache files are now deleted instead of accumulating indefinitely.
+
+### Removed
+- `PickImagesContract` (replaced by the Photo Picker contracts above).
+- `READ_EXTERNAL_STORAGE` / `READ_MEDIA_IMAGES` manifest permissions (no longer needed for gallery picking).
+
+[1.0.0]: https://github.com/nerojust/JetImagePicker/releases/tag/v1.0.0
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add CHANGELOG.md
+git commit -m "docs: add CHANGELOG for the 1.0.0 release"
+```
+
+---
+
+### Task 15: CONTRIBUTING.md
+
+**Files:**
+- Create: `CONTRIBUTING.md`
+
+**Interfaces:** None — documentation only.
+
+- [ ] **Step 1: Create the contribution guide**
+
+```markdown
+# Contributing to JetImagePicker
+
+Thanks for considering a contribution!
+
+## Getting started
+
+1. Fork and clone the repo.
+2. Open in Android Studio (or run `./gradlew build` from the CLI) — requires JDK 17 and the Android SDK (compileSdk 36).
+3. The `app` module is a runnable example that depends on the `JetImagePicker` module's local source (`implementation(project(":JetImagePicker"))`), so changes to the library are immediately reflected when you run `app`.
+
+## Before opening a PR
+
+Run the full local check suite — this is exactly what CI runs:
+
+```bash
+./gradlew ktlintCheck
+./gradlew detekt
+./gradlew lint
+./gradlew testDebugUnitTest
+./gradlew assembleDebug
+```
+
+- Formatting is enforced by [ktlint](https://github.com/pinterest/ktlint) — run `./gradlew ktlintFormat` to auto-fix.
+- Static analysis is enforced by [detekt](https://detekt.dev/). New findings must be fixed, not baselined — the baseline file only grandfathers pre-existing issues.
+- New logic (a branch, a loop, a parser, anything touching permissions or file I/O) needs a covering unit test.
+
+## Commit / PR conventions
+
+- Keep commits focused — one logical change per commit.
+- Write commit messages in the imperative mood (`fix: ...`, `feat: ...`, `docs: ...`) describing *why*, not just *what*.
+- Reference the issue number in the PR description if one exists.
+
+## Reporting bugs
+
+Open a GitHub issue with: the `JetImagePickerConfig` you used, the Android version/device, and (if possible) a minimal repro in the `app` module.
+
+## License
+
+By contributing, you agree your contributions are licensed under this project's [MIT License](LICENSE).
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add CONTRIBUTING.md
+git commit -m "docs: add CONTRIBUTING guide"
+```
+
+---
+
+### Task 16: README badges
+
+**Files:**
+- Modify: `README.md`
+
+**Interfaces:** None — documentation only. Depends on Task 11 (CI workflow filename `android-ci.yml`).
+
+- [ ] **Step 1: Add badges below the title**
+
+Directly below the `# 📸 JetImagePicker` heading, add:
+
+```markdown
+[![CI](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml/badge.svg)](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.nerojust/jetimagepicker.svg)](https://central.sonatype.com/artifact/io.github.nerojust/jetimagepicker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add README.md
+git commit -m "docs: add CI, Maven Central, and license badges to README"
+```
+
+---
+
+### Task 17: Dependabot for Gradle + GitHub Actions updates
+
+**Files:**
+- Create: `.github/dependabot.yml`
+
+**Interfaces:** None.
+
+- [ ] **Step 1: Create the config**
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add .github/dependabot.yml
+git commit -m "chore: add Dependabot config for Gradle and GitHub Actions"
+```
+1

@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ConstructorParameterNaming:JetImagePickerState.kt$JetImagePickerState$private val _isLoading: State&lt;Boolean&gt;</ID>
+    <ID>ConstructorParameterNaming:JetImagePickerState.kt$JetImagePickerState$private val _selectedImageUri: State&lt;Uri?&gt;</ID>
+    <ID>ConstructorParameterNaming:JetImagePickerState.kt$JetImagePickerState$private val _selectedImageUris: State&lt;List&lt;Uri&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:ImagePickerLauncher.kt$@Composable fun rememberImagePickerLauncher( context: Context, config: JetImagePickerConfig = JetImagePickerConfig(), onImagesPicked: (List&lt;Uri&gt;) -&gt; Unit, onPermissionStateChanged: (PermissionState) -&gt; Unit, onLoadingChanged: (Boolean) -&gt; Unit, ): Pair&lt;() -&gt; Unit, () -&gt; Unit&gt;</ID>
+    <ID>FunctionNaming:ImagePreview.kt$@Composable fun ImagePreview( uri: Uri, modifier: Modifier = Modifier, contentDescription: String? = "Selected image", )</ID>
+    <ID>FunctionNaming:MultiImagePreview.kt$@Composable fun MultiImagePreview( imageUris: List&lt;Uri&gt;, modifier: Modifier = Modifier, contentDescription: String? = "Selected image", )</ID>
+    <ID>LongMethod:ImagePickerLauncher.kt$@Composable fun rememberImagePickerLauncher( context: Context, config: JetImagePickerConfig = JetImagePickerConfig(), onImagesPicked: (List&lt;Uri&gt;) -&gt; Unit, onPermissionStateChanged: (PermissionState) -&gt; Unit, onLoadingChanged: (Boolean) -&gt; Unit, ): Pair&lt;() -&gt; Unit, () -&gt; Unit&gt;</ID>
+    <ID>TooGenericExceptionCaught:Utils.kt$Utils$e: Exception</ID>
+    <ID>UseCheckOrError:ImagePickerLauncher.kt$throw IllegalStateException("Context must be an Activity")</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,5 +1,9 @@
 # 📸 JetImagePicker
 
+[![CI](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml/badge.svg)](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.nerojust/jetimagepicker.svg)](https://central.sonatype.com/artifact/io.github.nerojust/jetimagepicker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A modern, Jetpack Compose-ready image picker library for Android.
 
 ---
@@ -17,40 +21,32 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 ## 🛠️ Setup
 
-1. **Add to your project**:
-
-If using as a module:
-```kotlin
-implementation(project(":JetImagePicker"))
-
-OR
-
-implementation("com.github.nerojust:JetImagePicker:v1")
-
-
-```
-2. **Add to your settings.gradle**:
+**Add the dependency:**
 
 ```kotlin
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven { url = uri("https://jitpack.io") }
-    }
+dependencies {
+    implementation("io.github.nerojust:jetimagepicker:1.0.0")
 }
 ```
+
+Or, if you're working inside this repo as a module:
+
+```kotlin
+implementation(project(":JetImagePicker"))
+```
+
+No extra repository declaration is needed — the artifact is published to Maven Central.
+
 ---
 
 ## 🧱 Usage
 
 ### 1. Configure your `AndroidManifest.xml`
 
+Gallery picking uses Android's Photo Picker and needs **no storage permission**. Only camera capture needs a runtime permission:
+
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <!-- for Android 13+ -->
 
 <application>
     <provider
@@ -84,6 +80,27 @@ dependencyResolutionManagement {
 ### ✅ Image Picker Screen
 
 ```kotlin
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.nerojust.jetimagepicker.config.JetImagePickerConfig
+import com.nerojust.jetimagepicker.result.ImagePickerResult
+import com.nerojust.jetimagepicker.state.rememberJetImagePickerState
+import com.nerojust.jetimagepicker.ui.ImagePreview
+import com.nerojust.jetimagepicker.ui.MultiImagePreview
+
 @Composable
 fun ImagePickerScreen() {
     val context = LocalContext.current
@@ -173,6 +190,20 @@ sealed class ImagePickerResult {
     data class ShowRationale(val permission: String) : ImagePickerResult()
 }
 ```
+
+---
+
+## ⏳ Loading State & Reset
+
+`pickerState.isLoading` is `true` while picked images are being compressed — use it to show a progress indicator:
+
+```kotlin
+if (pickerState.isLoading) {
+    CircularProgressIndicator()
+}
+```
+
+Call `pickerState.clearSelection()` to reset the current selection back to empty.
 
 ---
 

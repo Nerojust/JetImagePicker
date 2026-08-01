@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>FunctionNaming:ImagePickerScreen.kt$@Composable fun ImagePickerScreen(modifier: Modifier = Modifier)</ID>
+    <ID>LongMethod:ImagePickerScreen.kt$@Composable fun ImagePickerScreen(modifier: Modifier = Modifier)</ID>
+  </CurrentIssues>
+</SmellBaseline>
