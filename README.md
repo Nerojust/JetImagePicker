@@ -12,7 +12,7 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 1. Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
 2. Supports Camera and Gallery.
-3. Clean handling of runtime permissions – even on Android 13+
+3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
 4. Supports multiple image selection and compression
 5. Provides structured result callbacks for success and error handling
 6. Just works – no hidden setup, no ActivityResultContracts, and no more permission nightmares!
@@ -85,7 +85,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -134,17 +136,30 @@ fun ImagePickerScreen() {
     }
 
     Column(Modifier.padding(16.dp)) {
-        Button(onClick = pickerState.pickFromGallery) {
+        Button(onClick = pickerState.pickFromGallery, enabled = !pickerState.isLoading) {
             Text("Pick from Gallery")
         }
 
         Spacer(Modifier.height(8.dp))
 
-        Button(onClick = pickerState.captureWithCamera) {
+        Button(onClick = pickerState.captureWithCamera, enabled = !pickerState.isLoading) {
             Text("Capture with Camera")
         }
 
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = pickerState.clearSelection,
+            enabled = pickerState.selectedImageUris.isNotEmpty()
+        ) {
+            Text("Clear Selection")
+        }
+
         Spacer(Modifier.height(16.dp))
+
+        if (pickerState.isLoading) {
+            CircularProgressIndicator()
+        }
 
         when (pickerState.selectedImageUris.size) {
             1 -> ImagePreview(uri = pickerState.selectedImageUris.first())
@@ -161,6 +176,9 @@ fun ImagePickerScreen() {
     }
 }
 ```
+
+> 💡 The `app` module in this repo is a fuller interactive demo — toggle single vs. multiple
+> selection and compression on/off live, and see each image's file size update accordingly.
 
 ---
 
@@ -193,17 +211,16 @@ sealed class ImagePickerResult {
 
 ---
 
-## ⏳ Loading State & Reset
+## 📋 `JetImagePickerState` Reference
 
-`pickerState.isLoading` is `true` while picked images are being compressed — use it to show a progress indicator:
-
-```kotlin
-if (pickerState.isLoading) {
-    CircularProgressIndicator()
-}
-```
-
-Call `pickerState.clearSelection()` to reset the current selection back to empty.
+| Member | Description |
+|---|---|
+| `selectedImageUris` | All currently selected/captured image URIs. |
+| `selectedImageUri` | The first URI in `selectedImageUris`, or `null` if nothing is selected. |
+| `isLoading` | `true` while picked images are being compressed. |
+| `pickFromGallery` | Launches the gallery picker (Photo Picker on supported devices). |
+| `captureWithCamera` | Launches the system camera to capture a new photo. |
+| `clearSelection` | Resets `selectedImageUris`/`selectedImageUri` back to empty. |
 
 ---
 

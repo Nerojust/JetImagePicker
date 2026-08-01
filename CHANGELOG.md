@@ -20,11 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Image compression now runs off the main thread and preserves aspect ratio instead of stretching to the exact target size.
 - `ImagePickerResult` moved to its correct `result` package (was misplaced under `model`).
 - The example `app` module now depends on the local `JetImagePicker` module source instead of a published artifact.
+- README usage example now matches the current API in context (disables pick buttons while `isLoading`, includes the `clearSelection` button) instead of documenting `isLoading`/`clearSelection` in a separate, disconnected section; corrected a stale "even on Android 13+" permission claim.
+- `CONTRIBUTING.md` corrected to describe the detekt baseline as a one-time snapshot rather than something that grandfathers ongoing issues.
 
 ### Fixed
 - Compressed images are now returned as `FileProvider` URIs instead of raw `file://` URIs, avoiding `FileUriExposedException` on API 24+.
 - Selected images and an in-flight camera capture now survive rotation and process death (previously lost via plain `remember`).
 - Stale compressed/temp cache files are now deleted instead of accumulating indefinitely.
+- Multi-select compression could silently overwrite one photo with another: compressed output files were named from a millisecond timestamp alone, so two images compressed within the same millisecond collided on the same filename. Filenames are now guaranteed unique.
+- Camera permission denial could never be reported as a plain (non-permanent) denial — `isDenied` and `isPermanentlyDenied` were computed identically, so a first-time denial was always reported as permanent. The launcher now remembers whether the camera permission has been requested before to correctly distinguish the two.
+
+### Example app
+- Rewritten into a fuller interactive showcase: live toggles for single vs. multiple selection and compression on/off, a loading indicator tied to `isLoading`, a "Clear Selection" button wired to `clearSelection()`, and a per-image file size readout (labeled compressed/original) so the effect of compression is directly visible.
+- Fixed content rendering underneath the status bar (`enableEdgeToEdge()` was enabled with no corresponding inset padding).
 
 ### Removed
 - `PickImagesContract` (replaced by the Photo Picker contracts above).
