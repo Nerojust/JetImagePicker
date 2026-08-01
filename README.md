@@ -1,5 +1,9 @@
 # 📸 JetImagePicker
 
+[![CI](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml/badge.svg)](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml)
+[![JitPack](https://jitpack.io/v/Nerojust/JetImagePicker.svg)](https://jitpack.io/#Nerojust/JetImagePicker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A modern, Jetpack Compose-ready image picker library for Android.
 
 ---
@@ -8,7 +12,7 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 1. Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
 2. Supports Camera and Gallery.
-3. Clean handling of runtime permissions – even on Android 13+
+3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
 4. Supports multiple image selection and compression
 5. Provides structured result callbacks for success and error handling
 6. Just works – no hidden setup, no ActivityResultContracts, and no more permission nightmares!
@@ -17,23 +21,10 @@ A modern, Jetpack Compose-ready image picker library for Android.
 
 ## 🛠️ Setup
 
-1. **Add to your project**:
-
-If using as a module:
-```kotlin
-implementation(project(":JetImagePicker"))
-
-OR
-
-implementation("com.github.nerojust:JetImagePicker:v1")
-
-
-```
-2. **Add to your settings.gradle**:
+**1. Add the JitPack repository** to your `settings.gradle.kts`:
 
 ```kotlin
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
@@ -41,16 +32,31 @@ dependencyResolutionManagement {
     }
 }
 ```
+
+**2. Add the dependency**, using a released tag from the [Releases](https://github.com/Nerojust/JetImagePicker/releases) page (or see the badge above for the latest):
+
+```kotlin
+dependencies {
+    implementation("com.github.nerojust:JetImagePicker:v1.0.0")
+}
+```
+
+Or, if you're working inside this repo as a module:
+
+```kotlin
+implementation(project(":JetImagePicker"))
+```
+
 ---
 
 ## 🧱 Usage
 
 ### 1. Configure your `AndroidManifest.xml`
 
+Gallery picking uses Android's Photo Picker and needs **no storage permission**. Only camera capture needs a runtime permission:
+
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <!-- for Android 13+ -->
 
 <application>
     <provider
@@ -76,14 +82,36 @@ dependencyResolutionManagement {
 
 ---
 
-![jetimagepicker](https://github.com/user-attachments/assets/5b2b47a9-506a-4ba0-b980-091302e94ca0)
-
+<img width="1080" height="2340" alt="JetImagePicker screenshot" src="https://github.com/user-attachments/assets/c7ed5901-1666-48db-92b2-5cb5153e588c" />
 
 ## 🧩 Example
 
 ### ✅ Image Picker Screen
 
 ```kotlin
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.nerojust.jetimagepicker.config.JetImagePickerConfig
+import com.nerojust.jetimagepicker.result.ImagePickerResult
+import com.nerojust.jetimagepicker.state.rememberJetImagePickerState
+import com.nerojust.jetimagepicker.ui.ImagePreview
+import com.nerojust.jetimagepicker.ui.MultiImagePreview
+
 @Composable
 fun ImagePickerScreen() {
     val context = LocalContext.current
@@ -117,17 +145,30 @@ fun ImagePickerScreen() {
     }
 
     Column(Modifier.padding(16.dp)) {
-        Button(onClick = pickerState.pickFromGallery) {
+        Button(onClick = pickerState.pickFromGallery, enabled = !pickerState.isLoading) {
             Text("Pick from Gallery")
         }
 
         Spacer(Modifier.height(8.dp))
 
-        Button(onClick = pickerState.captureWithCamera) {
+        Button(onClick = pickerState.captureWithCamera, enabled = !pickerState.isLoading) {
             Text("Capture with Camera")
         }
 
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = pickerState.clearSelection,
+            enabled = pickerState.selectedImageUris.isNotEmpty()
+        ) {
+            Text("Clear Selection")
+        }
+
         Spacer(Modifier.height(16.dp))
+
+        if (pickerState.isLoading) {
+            CircularProgressIndicator()
+        }
 
         when (pickerState.selectedImageUris.size) {
             1 -> ImagePreview(uri = pickerState.selectedImageUris.first())
@@ -144,6 +185,9 @@ fun ImagePickerScreen() {
     }
 }
 ```
+
+> 💡 The `app` module in this repo is a fuller interactive demo — toggle single vs. multiple
+> selection and compression on/off live, and see each image's file size update accordingly.
 
 ---
 
@@ -173,6 +217,19 @@ sealed class ImagePickerResult {
     data class ShowRationale(val permission: String) : ImagePickerResult()
 }
 ```
+
+---
+
+## 📋 `JetImagePickerState` Reference
+
+| Member | Description |
+|---|---|
+| `selectedImageUris` | All currently selected/captured image URIs. |
+| `selectedImageUri` | The first URI in `selectedImageUris`, or `null` if nothing is selected. |
+| `isLoading` | `true` while picked images are being compressed. |
+| `pickFromGallery` | Launches the gallery picker (Photo Picker on supported devices). |
+| `captureWithCamera` | Launches the system camera to capture a new photo. |
+| `clearSelection` | Resets `selectedImageUris`/`selectedImageUri` back to empty. |
 
 ---
 

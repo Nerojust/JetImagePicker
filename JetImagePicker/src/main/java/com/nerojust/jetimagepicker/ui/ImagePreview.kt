@@ -16,22 +16,27 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 
+/**
+ * Displays a single selected image at a fixed 250dp height, cropped to fill the width.
+ */
 @Composable
 fun ImagePreview(
     uri: Uri,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentDescription: String? = "Selected image",
 ) {
     val painter = rememberAsyncImagePainter(model = uri)
 
     Image(
         painter = painter,
-        contentDescription = "Selected Image",
+        contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(250.dp)
-            .padding(4.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .border(1.dp, Color.LightGray, MaterialTheme.shapes.medium)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(250.dp)
+                .padding(4.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .border(1.dp, Color.LightGray, MaterialTheme.shapes.medium),
     )
 }

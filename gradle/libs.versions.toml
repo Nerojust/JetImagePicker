@@ -1,6 +1,5 @@
 [versions]
 agp = "8.6.0"
-jetimagepicker = "v1"
 kotlin = "2.2.0"
 composeCompiler = "1.5.13"
 coreKtx = "1.16.0"
@@ -15,10 +14,12 @@ material = "1.12.0"
 coil = "2.6.0"
 parcelize = "1.9.0"
 junitJunit = "4.12"
+kotlinxCoroutines = "1.7.3"
+ktlint = "12.1.1"
+detekt = "1.23.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-jetimagepicker = { module = "com.github.nerojust:JetImagePicker", version.ref = "jetimagepicker" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -40,6 +41,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -47,4 +49,6 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 

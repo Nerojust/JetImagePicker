@@ -13,19 +13,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 
+/**
+ * Displays a horizontally scrolling row of selected images, each 120dp square.
+ */
 @Composable
 fun MultiImagePreview(
     imageUris: List<Uri>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentDescription: String? = "Selected image",
 ) {
     LazyRow(modifier = modifier.fillMaxWidth()) {
         items(imageUris) { uri ->
             Image(
                 painter = rememberAsyncImagePainter(uri),
-                contentDescription = null,
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .size(120.dp)
+                contentDescription = contentDescription,
+                modifier =
+                    Modifier
+                        .padding(end = 8.dp)
+                        .size(120.dp),
             )
         }
     }
