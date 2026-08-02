@@ -5,7 +5,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CropAspectRatioTest {
-
     @Test
     fun `free has no ratio`() {
         assertNull(CropAspectRatio.Free.toRatioOrNull())

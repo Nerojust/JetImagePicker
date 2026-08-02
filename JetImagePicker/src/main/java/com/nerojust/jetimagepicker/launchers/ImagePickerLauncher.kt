@@ -20,12 +20,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.mr0xf00.easycrop.CropResult
+import com.mr0xf00.easycrop.crop
+import com.mr0xf00.easycrop.rememberImageCropper
+import com.mr0xf00.easycrop.ui.ImageCropperDialog
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
+import com.nerojust.jetimagepicker.config.toRatioOrNull
 import com.nerojust.jetimagepicker.model.PermissionState
 import com.nerojust.jetimagepicker.utils.Utils.compressImage
 import com.nerojust.jetimagepicker.utils.Utils.createImageUri
+import com.nerojust.jetimagepicker.utils.Utils.writeBitmapToCache
 import kotlinx.coroutines.launch
 
 private val NullableUriSaver =
@@ -37,7 +45,9 @@ private val NullableUriSaver =
 /**
  * Sets up the gallery and camera activity-result launchers backing [rememberJetImagePickerState].
  * Gallery picking uses Android's Photo Picker contracts and requires no storage permission;
- * camera capture requests `android.Manifest.permission.CAMERA` at runtime.
+ * camera capture requests `android.Manifest.permission.CAMERA` at runtime. When
+ * [JetImagePickerConfig.enableCrop] is true, a crop dialog is shown automatically before
+ * compression whenever exactly one image was picked/captured.
  *
  * @return A pair of (launchGallery, launchCamera) functions.
  */
@@ -57,36 +67,72 @@ fun rememberImagePickerLauncher(
         mutableStateOf<Uri?>(null)
     }
     var shouldLaunchCamera by remember { mutableStateOf(false) }
-    // Android's shouldShowRequestPermissionRationale() returns false both before the permission
-    // has ever been requested and once it's permanently denied - the two are indistinguishable
-    // without tracking history ourselves, so we remember whether we've asked before.
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
     var previousCompressedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    // ponytail: boolean gate, not a mutex — fully serializes pick-and-compress cycles so
+    // ponytail: boolean gate, not a mutex - fully serializes pick-and-compress cycles so
     // previousCompressedUris is never touched by two overlapping processPicked calls.
     var isProcessing by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+    val imageCropper = rememberImageCropper()
+
+    // Lock the crop region to the configured aspect ratio the moment a crop starts.
+    LaunchedEffect(imageCropper.cropState, config.cropAspectRatio) {
+        val state = imageCropper.cropState ?: return@LaunchedEffect
+        val ratio = config.cropAspectRatio.toRatioOrNull() ?: return@LaunchedEffect
+        val current = state.region
+        val targetWidth = minOf(current.width, current.height * ratio)
+        val targetHeight = targetWidth / ratio
+        val centerX = current.left + current.width / 2f
+        val centerY = current.top + current.height / 2f
+        state.region =
+            Rect(
+                left = centerX - targetWidth / 2f,
+                top = centerY - targetHeight / 2f,
+                right = centerX + targetWidth / 2f,
+                bottom = centerY + targetHeight / 2f,
+            )
+        state.aspectLock = true
+    }
+
+    imageCropper.cropState?.let { ImageCropperDialog(it) }
 
     suspend fun processPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) {
+            onImagesPicked(emptyList())
+            return
+        }
         isProcessing = true
         try {
-            if (uris.isEmpty()) {
-                onImagesPicked(emptyList())
-                return
-            }
+            val toCompress =
+                if (config.enableCrop && uris.size == 1) {
+                    when (val result = imageCropper.crop(uris.first(), context)) {
+                        is CropResult.Success -> {
+                            val cropped = writeBitmapToCache(context, result.bitmap.asAndroidBitmap())
+                            listOfNotNull(cropped)
+                        }
+                        else -> {
+                            // Cancelled or failed - treat like any other cancellation in this library.
+                            onImagesPicked(emptyList())
+                            return
+                        }
+                    }
+                } else {
+                    uris
+                }
+
             if (config.enableCompression) {
                 onLoadingChanged(true)
-                val compressed = uris.mapNotNull { compressImage(context, it, config) }
+                val compressed = toCompress.mapNotNull { compressImage(context, it, config) }
                 onLoadingChanged(false)
-                // Compressed files are ours (written to cacheDir via FileProvider) — safe to delete.
+                // Compressed files are ours (written to cacheDir via FileProvider) - safe to delete.
                 for (uri in previousCompressedUris) {
                     context.contentResolver.delete(uri, null, null)
                 }
                 previousCompressedUris = compressed
                 onImagesPicked(compressed)
             } else {
-                onImagesPicked(uris)
+                onImagesPicked(toCompress)
             }
         } finally {
             isProcessing = false
@@ -117,7 +163,7 @@ fun rememberImagePickerLauncher(
                 coroutineScope.launch {
                     processPicked(listOf(capturedUri))
                     // Compression (if enabled) superseded this raw capture with a new file that's
-                    // now tracked in previousCompressedUris — the raw temp file is otherwise never
+                    // now tracked in previousCompressedUris - the raw temp file is otherwise never
                     // cleaned up and would leak in cacheDir. Leave it alone when compression is
                     // disabled: capturedUri is then the live selection handed to onImagesPicked.
                     if (config.enableCompression) {
@@ -125,7 +171,7 @@ fun rememberImagePickerLauncher(
                     }
                 }
             } else {
-                // Capture was cancelled/failed — clean up the temp file we created for it.
+                // Capture was cancelled/failed - clean up the temp file we created for it.
                 capturedUri?.let { context.contentResolver.delete(it, null, null) }
                 tempCameraUri = null
                 onImagesPicked(emptyList())
@@ -138,8 +184,6 @@ fun rememberImagePickerLauncher(
                 PackageManager.PERMISSION_GRANTED
         val shouldShowRationale =
             ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
-        // Only treat "no rationale offered" as permanent once we know we've asked before -
-        // otherwise it's the ambiguous pre-first-request state, reported as a plain denial.
         val isPermanentlyDenied = !isGranted && !shouldShowRationale && hasCameraPermissionBeenRequested
         val isDenied = !isGranted && !shouldShowRationale && !hasCameraPermissionBeenRequested
         return PermissionState(

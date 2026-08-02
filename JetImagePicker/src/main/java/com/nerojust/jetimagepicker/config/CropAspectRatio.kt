@@ -4,7 +4,6 @@ package com.nerojust.jetimagepicker.config
  * Constrains the crop region shown when [JetImagePickerConfig.enableCrop] is true.
  */
 sealed class CropAspectRatio {
-
     /** No constraint — the user can freely resize the crop region. */
     data object Free : CropAspectRatio()
 
