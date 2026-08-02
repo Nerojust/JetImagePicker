@@ -48,4 +48,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PickImagesContract` (replaced by the Photo Picker contracts above).
 - `READ_EXTERNAL_STORAGE` / `READ_MEDIA_IMAGES` manifest permissions (no longer needed for gallery picking).
 
+[2.0.0]: https://github.com/nerojust/JetImagePicker/releases/tag/v2.0.0
 [1.0.1]: https://github.com/nerojust/JetImagePicker/releases/tag/v1.0.1
