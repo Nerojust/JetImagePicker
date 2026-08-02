@@ -4,7 +4,9 @@
 [![JitPack](https://jitpack.io/v/Nerojust/JetImagePicker.svg)](https://jitpack.io/#Nerojust/JetImagePicker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A modern, Jetpack Compose-ready image picker library for Android.
+A modern, Jetpack Compose-ready image picker for Android — because hand-rolling
+`ActivityResultContracts` and permission flows for the fifth project in a row
+should not be anyone's personality trait.
 
 ---
 
@@ -15,11 +17,13 @@ A modern, Jetpack Compose-ready image picker library for Android.
 3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
 4. Supports multiple image selection and compression
 5. Provides structured result callbacks for success and error handling
-6. Just works – no hidden setup, no ActivityResultContracts, and no more permission nightmares!
+6. Just works – no hidden setup, no `ActivityResultContracts`, and no more permission nightmares!
 
 ---
 
 ## 🛠️ Setup
+
+Two steps. We tried to make it one, but Android's `FileProvider` insisted.
 
 **1. Add the JitPack repository** to your `settings.gradle.kts`:
 
@@ -37,7 +41,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.nerojust:JetImagePicker:v1.0.0")
+    implementation("com.github.nerojust:JetImagePicker:v1.0.1")
 }
 ```
 
@@ -50,6 +54,8 @@ implementation(project(":JetImagePicker"))
 ---
 
 ## 🧱 Usage
+
+A little manifest housekeeping, then you're done. Promise.
 
 ### 1. Configure your `AndroidManifest.xml`
 
@@ -87,6 +93,8 @@ Gallery picking uses Android's Photo Picker and needs **no storage permission**.
 ## 🧩 Example
 
 ### ✅ Image Picker Screen
+
+Copy, paste, run. No fourteen-step tutorial required.
 
 ```kotlin
 import androidx.compose.foundation.layout.Column
@@ -233,15 +241,70 @@ sealed class ImagePickerResult {
 
 ---
 
+## 🐛 Common Gotchas
+
+### "Why do I get three different permission results instead of just `Denied`?"
+
+Because Android's permission model has main-character energy and never keeps it simple. Here's what's actually happening, step by step:
+
+1. **First-ever ask, user taps "Deny"** → you get `ShowRationale`. Android's take: *"They said no, but you can ask again — maybe explain yourself first this time."* Show a small dialog explaining why you need the permission, then call `pickFromGallery`/`captureWithCamera` again.
+2. **Asked before, denied again, OS still willing to listen** → `PermissionDenied`. Same energy as above — not fatal, just mildly rude. Let the user retry.
+3. **User checked "Don't ask again," or the OS has simply had enough of this conversation** → `PermissionPermanentlyDenied`. This is Android saying *"we are not doing this a third time."* Your only move now is Settings:
+
+```kotlin
+is ImagePickerResult.PermissionPermanentlyDenied -> {
+    context.startActivity(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+        }
+    )
+}
+```
+
+This whole dance is **camera-only**, by the way — gallery picking goes through Android's Photo Picker, which asks for no permission at all. One less state to lose sleep over.
+
+### "I set `targetWidth` but nothing got resized"
+
+`targetWidth` and `targetHeight` are a matched set — set one without the other and the library quietly does nothing (no crash, no log, no resizing, just vibes). Bring both or bring neither:
+
+```kotlin
+JetImagePickerConfig(
+    targetWidth = 1024,
+    targetHeight = 1024 // <- skip this and targetWidth silently does nothing
+)
+```
+
+---
+
 ## ❤️ Contributions
 
-Contributions are welcome! Open issues, submit PRs, or suggest ideas.
+Found a bug? Have an idea? Just want to say the `Common Gotchas` section made
+you laugh? Open an issue or a PR — all of it is welcome, and none of it needs
+to be perfect before you send it.
+
+---
+
+## ☕ Buy Me a Coffee
+
+If JetImagePicker saved you from writing your own permission-handling code at
+2am, consider fueling the next release:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-blue.svg?logo=paypal)](https://www.paypal.com/donate/?business=arkandarcsfashion%40gmail.com&currency_code=USD)
+
+No pressure though — a ⭐ on the repo is free and helps just as much.
 
 ---
 
 ## 🧑‍💻 Author
 
-Made with 💙 by [Nerojust](https://github.com/Nerojust)
+Made with 💙 (and a healthy amount of `adb logcat` squinting) by [Nerojust](https://github.com/Nerojust)
+
+Also findable here:
+
+- [LinkedIn](https://www.linkedin.com/in/nerojust)
+- [Medium](https://medium.com/@nerojust4)
+- [Dev.to](https://dev.to/nerojust/building-payment-flows-in-android-lessons-from-real-fintech-apps-5a09) — building payment flows in Android, lessons from real fintech apps
+- [GitHub](https://github.com/Nerojust) — follows appreciated
 
 ---
 
