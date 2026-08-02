@@ -17,6 +17,7 @@ junitJunit = "4.12"
 kotlinxCoroutines = "1.7.3"
 ktlint = "12.1.1"
 detekt = "1.23.6"
+easycrop = "0.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,6 +43,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+easycrop = { group = "io.github.mr0xf00", name = "easycrop", version.ref = "easycrop" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

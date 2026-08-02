@@ -16,8 +16,9 @@ should not be anyone's personality trait.
 2. Supports Camera and Gallery.
 3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
 4. Supports multiple image selection and compression
-5. Provides structured result callbacks for success and error handling
-6. Just works – no hidden setup, no `ActivityResultContracts`, and no more permission nightmares!
+5. Optional crop step (free, square, or custom aspect ratio) shown automatically — no extra UI code
+6. Provides structured result callbacks for success and error handling
+7. Just works – no hidden setup, no `ActivityResultContracts`, and no more permission nightmares!
 
 ---
 
@@ -195,7 +196,32 @@ fun ImagePickerScreen() {
 ```
 
 > 💡 The `app` module in this repo is a fuller interactive demo — toggle single vs. multiple
-> selection and compression on/off live, and see each image's file size update accordingly.
+> selection, compression, and crop-to-square on/off live, and see each image's file size update
+> accordingly.
+
+---
+
+## ✂️ Cropping (v2)
+
+Set `enableCrop = true` and a crop dialog appears automatically — right between picking/capturing
+and compression, no extra composable needed. It applies whenever exactly one image is in play:
+always for camera capture, and for gallery picks only when a single image was selected.
+
+```kotlin
+JetImagePickerConfig(
+    enableCrop = true,
+    cropAspectRatio = CropAspectRatio.Square, // or Free, or Custom(ratioX = 16f, ratioY = 9f)
+)
+```
+
+| `CropAspectRatio` | Description |
+|---|---|
+| `Free` | No constraint — the user can freely resize the crop region. (default) |
+| `Square` | 1:1 — the classic avatar/profile-picture crop. |
+| `Custom(ratioX, ratioY)` | Any arbitrary ratio, e.g. `Custom(16f, 9f)` for 16:9. |
+
+Cancelling the crop dialog is treated like any other cancellation in this library — an empty
+result, nothing picked.
 
 ---
 
@@ -207,7 +233,9 @@ JetImagePickerConfig(
     compressionQuality = 70, // 0–100
     allowMultiple = true,
     targetWidth = 1024,
-    targetHeight = 1024
+    targetHeight = 1024,
+    enableCrop = false,
+    cropAspectRatio = CropAspectRatio.Free
 )
 ```
 

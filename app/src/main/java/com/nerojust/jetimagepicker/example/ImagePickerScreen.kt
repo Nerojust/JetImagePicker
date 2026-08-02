@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.nerojust.jetimagepicker.config.CropAspectRatio
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
 import com.nerojust.jetimagepicker.result.ImagePickerResult
 import com.nerojust.jetimagepicker.state.rememberJetImagePickerState
@@ -41,6 +42,28 @@ private fun formatFileSize(bytes: Long): String {
     return if (kb < BYTES_PER_KB) "%.0f KB".format(kb) else "%.1f MB".format(kb / BYTES_PER_KB)
 }
 
+private fun modeLabel(
+    enabled: Boolean,
+    onLabel: String,
+    offLabel: String,
+) = if (enabled) onLabel else offLabel
+
+@Composable
+private fun LabeledSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
 @Composable
 fun ImagePickerScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -50,6 +73,7 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
     // selection, and compressed vs. original output.
     var allowMultiple by remember { mutableStateOf(false) }
     var enableCompression by remember { mutableStateOf(true) }
+    var enableCrop by remember { mutableStateOf(false) }
 
     val pickerState =
         rememberJetImagePickerState(
@@ -61,6 +85,8 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
                     allowMultiple = allowMultiple,
                     targetWidth = 1024,
                     targetHeight = 1024,
+                    enableCrop = enableCrop,
+                    cropAspectRatio = CropAspectRatio.Square,
                 ),
         ) { result ->
             when (result) {
@@ -103,23 +129,23 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(if (allowMultiple) "Multiple selection" else "Single selection")
-            Switch(checked = allowMultiple, onCheckedChange = { allowMultiple = it })
-        }
+        LabeledSwitch(
+            label = modeLabel(allowMultiple, "Multiple selection", "Single selection"),
+            checked = allowMultiple,
+            onCheckedChange = { allowMultiple = it },
+        )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(if (enableCompression) "Compression on" else "Compression off")
-            Switch(checked = enableCompression, onCheckedChange = { enableCompression = it })
-        }
+        LabeledSwitch(
+            label = modeLabel(enableCompression, "Compression on", "Compression off"),
+            checked = enableCompression,
+            onCheckedChange = { enableCompression = it },
+        )
+
+        LabeledSwitch(
+            label = modeLabel(enableCrop, "Crop to square on", "Crop to square off"),
+            checked = enableCrop,
+            onCheckedChange = { enableCrop = it },
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()

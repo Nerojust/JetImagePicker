@@ -14,6 +14,11 @@ package com.nerojust.jetimagepicker.config
  * preserving aspect ratio. Requires [targetWidth] to also be set.
  * @property allowMultiple If true, the gallery picker allows selecting more than
  * one image.
+ * @property enableCrop If true, a crop step runs before compression whenever
+ * exactly one image was picked/captured (camera capture always; gallery pick
+ * only when a single image was selected).
+ * @property cropAspectRatio The aspect ratio the crop region is constrained to
+ * when [enableCrop] is true.
  */
 data class JetImagePickerConfig(
     val enableCompression: Boolean = true,
@@ -24,4 +29,6 @@ data class JetImagePickerConfig(
     val targetHeight: Int? = null,
     // For future extensibility
     val allowMultiple: Boolean = true,
+    val enableCrop: Boolean = false,
+    val cropAspectRatio: CropAspectRatio = CropAspectRatio.Free,
 )

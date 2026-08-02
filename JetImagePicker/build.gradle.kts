@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "io.github.nerojust"
-version = "1.0.0"
+version = "2.0.0"
 
 android {
     namespace = "com.nerojust.jetimagepicker"
@@ -60,7 +60,7 @@ afterEvaluate {
 
                 groupId = "io.github.nerojust"
                 artifactId = "jetimagepicker"
-                version = "1.0.0"
+                version = "2.0.0"
 
                 pom {
                     name.set("JetImagePicker")
@@ -108,9 +108,11 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.easycrop)
 }
 
 detekt {
     buildUponDefaultConfig = true
     baseline = file("detekt-baseline.xml")
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
 }

@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.graphics.scale
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
@@ -22,6 +23,8 @@ import java.util.UUID
  * Internal file/image helpers backing [rememberImagePickerLauncher]. Not intended for direct use by consumers.
  */
 object Utils {
+    private const val MAX_QUALITY = 100
+
     /** Creates a new empty cache file for a camera capture and returns its [FileProvider] URI. */
     fun createImageUri(context: Context): Uri {
         val file =
@@ -97,5 +100,22 @@ object Utils {
                 e.printStackTrace()
                 null
             }
+        }
+
+    /**
+     * Writes [bitmap] to a new cache file as JPEG and returns its [FileProvider] URI.
+     * Used to turn an in-memory cropped bitmap back into a [Uri] the rest of the pipeline expects.
+     */
+    fun writeBitmapToCache(
+        context: Context,
+        bitmap: Bitmap,
+    ): Uri? =
+        try {
+            val file = File(context.cacheDir, "CROP_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+            FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, MAX_QUALITY, it) }
+            FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        } catch (e: Exception) {
+            Log.e("JetImagePicker", "Failed to write cropped bitmap to cache", e)
+            null
         }
 }
