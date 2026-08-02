@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "io.github.nerojust"
-version = "1.0.0"
+version = "2.0.0"
 
 android {
     namespace = "com.nerojust.jetimagepicker"
@@ -60,7 +60,7 @@ afterEvaluate {
 
                 groupId = "io.github.nerojust"
                 artifactId = "jetimagepicker"
-                version = "1.0.0"
+                version = "2.0.0"
 
                 pom {
                     name.set("JetImagePicker")
