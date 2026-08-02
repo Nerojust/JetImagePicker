@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-08-02
+
+### Added
+- Optional automatic crop step: `JetImagePickerConfig.enableCrop` + `CropAspectRatio` (`Free`, `Square`, `Custom(ratioX, ratioY)`). Runs between picking/capturing and compression, rendered automatically via [`easycrop`](https://github.com/mr0xf00/easycrop) with no extra composable required from consumers. Applies whenever exactly one image is in play — always for camera capture, and for gallery picks only when a single image was selected.
+- Example app demonstrates the crop feature with a live toggle (defaults to square crop).
+
 ## [1.0.1] - 2026-08-01
 
 ### Added
