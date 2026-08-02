@@ -42,7 +42,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.nerojust:JetImagePicker:v1.0.1")
+    implementation("com.github.nerojust:JetImagePicker:v2.0.0")
 }
 ```
 
