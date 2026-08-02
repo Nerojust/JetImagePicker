@@ -89,7 +89,7 @@ Gallery picking uses Android's Photo Picker and needs **no storage permission**.
 
 ---
 
-<img width="1080" height="2340" alt="JetImagePicker screenshot" src="https://github.com/user-attachments/assets/c7ed5901-1666-48db-92b2-5cb5153e588c" />
+<img width="360" alt="JetImagePicker demo app showing the mode toggles and a cropped, compressed image" src="docs/images/screenshot.png" />
 
 ## 🧩 Example
 
