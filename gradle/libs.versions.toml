@@ -1,6 +1,6 @@
 [versions]
 agp = "8.6.0"
-kotlin = "2.2.0"
+kotlin = "2.4.10"
 composeCompiler = "1.5.13"
 coreKtx = "1.16.0"
 junit = "4.13.2"
