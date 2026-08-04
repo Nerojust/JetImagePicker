@@ -16,7 +16,7 @@ parcelize = "1.9.0"
 junitJunit = "4.12"
 kotlinxCoroutines = "1.7.3"
 ktlint = "12.1.1"
-detekt = "1.23.6"
+detekt = "1.23.8"
 easycrop = "0.1.1"
 
 [libraries]
