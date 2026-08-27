@@ -1,0 +1,41 @@
+name: Traffic Stats
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # daily, before the 14-day window rolls off
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch and merge traffic stats
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          file=data/traffic-history.json
+          [ -f "$file" ] || echo '{"views":{},"clones":{}}' > "$file"
+
+          views=$(gh api "repos/$REPO/traffic/views" --jq '.views // []')
+          clones=$(gh api "repos/$REPO/traffic/clones" --jq '.clones // []')
+
+          jq --argjson views "$views" --argjson clones "$clones" '
+            .views |= (reduce $views[] as $d (.; . + {($d.timestamp | split("T")[0]): {count: $d.count, uniques: $d.uniques}})) |
+            .clones |= (reduce $clones[] as $d (.; . + {($d.timestamp | split("T")[0]): {count: $d.count, uniques: $d.uniques}}))
+          ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/traffic-history.json
+          git diff --cached --quiet || git commit -m "chore: update traffic stats"
+          git push
