@@ -1,41 +1,46 @@
-name: Traffic Stats
+name: Track Traffic
 
 on:
   schedule:
-    - cron: '0 3 * * *' # daily, before the 14-day window rolls off
-  workflow_dispatch: {}
+    - cron: "0 0 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  capture:
+  track:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch and merge traffic stats
+      - name: Fetch traffic stats
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.TRAFFIC_PAT }}
         run: |
-          set -euo pipefail
-          mkdir -p data
-          file=data/traffic-history.json
-          [ -f "$file" ] || echo '{"views":{},"clones":{}}' > "$file"
+          curl -sf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/traffic/views > views.json
+          curl -sf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/traffic/clones > clones.json
 
-          views=$(gh api "repos/$REPO/traffic/views" --jq '.views // []')
-          clones=$(gh api "repos/$REPO/traffic/clones" --jq '.clones // []')
+      - name: Merge into history
+        run: |
+          FILE=.github/traffic-history.json
+          [ -f "$FILE" ] || echo "[]" > "$FILE"
 
-          jq --argjson views "$views" --argjson clones "$clones" '
-            .views |= (reduce $views[] as $d (.; . + {($d.timestamp | split("T")[0]): {count: $d.count, uniques: $d.uniques}})) |
-            .clones |= (reduce $clones[] as $d (.; . + {($d.timestamp | split("T")[0]): {count: $d.count, uniques: $d.uniques}}))
-          ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          jq -s '
+            (.[0] | map({(.date): .}) | add // {}) as $existing
+            | (.[1].views // [] | map({(.timestamp[:10]): {date: .timestamp[:10], views: {count, uniques}}}) | add // {}) as $v
+            | (.[2].clones // [] | map({(.timestamp[:10]): {date: .timestamp[:10], clones: {count, uniques}}}) | add // {}) as $c
+            | $existing * $v * $c
+            | [.[]] | sort_by(.date)
+          ' "$FILE" views.json clones.json > merged.json
+          mv merged.json "$FILE"
+          rm -f views.json clones.json
 
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/traffic-history.json
-          git diff --cached --quiet || git commit -m "chore: update traffic stats"
-          git push
+          git add .github/traffic-history.json
+          git diff --cached --quiet || (git commit -m "Update traffic history" && git push)
