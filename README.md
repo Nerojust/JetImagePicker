@@ -314,7 +314,7 @@ to be perfect before you send it.
 If JetImagePicker saved you from writing your own permission-handling code at
 2am, consider fueling the next release:
 
-[![Buy Me a Coffee](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-blue.svg?logo=paypal)](https://www.paypal.com/donate/?business=arkandarcsfashion%40gmail.com&currency_code=USD)
+[![Buy Me a Coffee](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-blue.svg?logo=paypal)](https://www.paypal.com/donate/?business=arkandarcsfashion%40gmail.com&currency_code=USD&amount=5)
 
 No pressure though — a ⭐ on the repo is free and helps just as much.
 
