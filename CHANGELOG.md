@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-09-13
+
+### Changed
+- Switched Maven Central publishing to the `com.vanniktech.maven.publish` plugin, wired to a GitHub Actions release workflow (tag-triggered) using the Central Portal.
+- Bumped AGP to 8.13.2 (required by the publish plugin).
+
 ## [2.0.0] - 2026-08-02
 
 ### Added

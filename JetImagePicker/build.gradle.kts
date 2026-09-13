@@ -4,12 +4,11 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
-    id("maven-publish")
-    id("signing")
+    alias(libs.plugins.vanniktech.publish)
 }
 
 group = "io.github.nerojust"
-version = "2.0.0"
+version = "2.0.1"
 
 android {
     namespace = "com.nerojust.jetimagepicker"
@@ -43,49 +42,35 @@ android {
     kotlin {
         jvmToolchain(11)
     }
-
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-            withJavadocJar() // Optional: adds empty javadoc.jar if you don’t have one
-        }
-    }
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"]) // This needs to be inside afterEvaluate
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
 
-                groupId = "io.github.nerojust"
-                artifactId = "jetimagepicker"
-                version = "2.0.0"
+    coordinates(group.toString(), "jetimagepicker", version.toString())
 
-                pom {
-                    name.set("JetImagePicker")
-                    description.set("A Jetpack Compose image picker library")
-                    url.set("https://github.com/nerojust/JetImagePicker")
-                    licenses {
-                        license {
-                            name.set("MIT License")
-                            url.set("https://opensource.org/licenses/MIT")
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set("nerojust")
-                            name.set("Adjekughene Nyerhovwo")
-                            email.set("nerojust4@gmail.com")
-                        }
-                    }
-                    scm {
-                        connection.set("scm:git:git://github.com/nerojust/JetImagePicker.git")
-                        developerConnection.set("scm:git:ssh://github.com/nerojust/JetImagePicker.git")
-                        url.set("https://github.com/nerojust/JetImagePicker")
-                    }
-                }
+    pom {
+        name.set("JetImagePicker")
+        description.set("A Jetpack Compose image picker library")
+        url.set("https://github.com/nerojust/JetImagePicker")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://opensource.org/licenses/MIT")
             }
+        }
+        developers {
+            developer {
+                id.set("nerojust")
+                name.set("Adjekughene Nyerhovwo")
+                email.set("nerojust4@gmail.com")
+            }
+        }
+        scm {
+            connection.set("scm:git:git://github.com/nerojust/JetImagePicker.git")
+            developerConnection.set("scm:git:ssh://github.com/nerojust/JetImagePicker.git")
+            url.set("https://github.com/nerojust/JetImagePicker")
         }
     }
 }
