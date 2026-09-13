@@ -1,7 +1,7 @@
 # 📸 JetImagePicker
 
 [![CI](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml/badge.svg)](https://github.com/nerojust/JetImagePicker/actions/workflows/android-ci.yml)
-[![JitPack](https://jitpack.io/v/Nerojust/JetImagePicker.svg)](https://jitpack.io/#Nerojust/JetImagePicker)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.nerojust/jetimagepicker.svg)](https://central.sonatype.com/artifact/io.github.nerojust/jetimagepicker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A modern, Jetpack Compose-ready image picker for Android — because hand-rolling
@@ -24,25 +24,22 @@ should not be anyone's personality trait.
 
 ## 🛠️ Setup
 
-Two steps. We tried to make it one, but Android's `FileProvider` insisted.
-
-**1. Add the JitPack repository** to your `settings.gradle.kts`:
+One step, straight from Maven Central. Make sure `mavenCentral()` is in your `settings.gradle.kts`:
 
 ```kotlin
 dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
     }
 }
 ```
 
-**2. Add the dependency**, using a released tag from the [Releases](https://github.com/Nerojust/JetImagePicker/releases) page (or see the badge above for the latest):
+Then add the dependency (see the badge above for the latest version):
 
 ```kotlin
 dependencies {
-    implementation("com.github.nerojust:JetImagePicker:v2.0.0")
+    implementation("io.github.nerojust:jetimagepicker:2.0.1")
 }
 ```
 
