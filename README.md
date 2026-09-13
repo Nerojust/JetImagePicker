@@ -222,6 +222,38 @@ result, nothing picked.
 
 ---
 
+## 🎥 Video (v2.1)
+
+Pick or capture video with `rememberJetVideoPickerState` — a separate API from the image picker,
+so you wire it up independently:
+
+```kotlin
+val videoPickerState = rememberJetVideoPickerState(
+    context = context,
+    config = JetVideoPickerConfig(
+        enableCompression = true,
+        enableThumbnail = true,
+        durationLimitSeconds = 60,
+    ),
+) { result ->
+    when (result) {
+        is VideoPickerResult.Success -> { /* result.uri, result.thumbnailUri */ }
+        is VideoPickerResult.DurationExceeded -> { /* result.uri exceeded result.limitSeconds */ }
+        is VideoPickerResult.PermissionDenied -> { /* ... */ }
+        is VideoPickerResult.PermissionPermanentlyDenied -> { /* ... */ }
+        is VideoPickerResult.ShowRationale -> { /* ... */ }
+    }
+}
+
+Button(onClick = videoPickerState.pickFromGallery) { Text("Pick Video") }
+Button(onClick = videoPickerState.captureWithCamera) { Text("Capture Video") }
+```
+
+Camera capture only requests `CAMERA` — the system camera app handles audio recording under its
+own permission, so no `RECORD_AUDIO` request happens here either.
+
+---
+
 ## 📦 Configuration Options
 
 ```kotlin
