@@ -3,7 +3,6 @@ package com.nerojust.jetimagepicker.launchers
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,13 +16,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.mr0xf00.easycrop.CropResult
 import com.mr0xf00.easycrop.crop
 import com.mr0xf00.easycrop.rememberImageCropper
@@ -35,12 +31,6 @@ import com.nerojust.jetimagepicker.utils.Utils.compressImage
 import com.nerojust.jetimagepicker.utils.Utils.createImageUri
 import com.nerojust.jetimagepicker.utils.Utils.writeBitmapToCache
 import kotlinx.coroutines.launch
-
-private val NullableUriSaver =
-    Saver<Uri?, String>(
-        save = { it?.toString() ?: "" },
-        restore = { if (it.isEmpty()) null else Uri.parse(it) },
-    )
 
 /**
  * Sets up the gallery and camera activity-result launchers backing [rememberJetImagePickerState].
@@ -178,27 +168,16 @@ fun rememberImagePickerLauncher(
             }
         }
 
-    fun calculatePermissionState(permission: String): PermissionState {
-        val isGranted =
-            ContextCompat.checkSelfPermission(context, permission) ==
-                PackageManager.PERMISSION_GRANTED
-        val shouldShowRationale =
-            ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
-        val isPermanentlyDenied = !isGranted && !shouldShowRationale && hasCameraPermissionBeenRequested
-        val isDenied = !isGranted && !shouldShowRationale && !hasCameraPermissionBeenRequested
-        return PermissionState(
-            permission = permission,
-            isGranted = isGranted,
-            isDenied = isDenied,
-            isPermanentlyDenied = isPermanentlyDenied,
-            shouldShowRationale = shouldShowRationale,
-        )
-    }
-
     val cameraPermissionLauncher =
         rememberLauncherForActivityResult(RequestPermission()) { granted ->
             // Compute state using whether we'd asked before THIS request, then record that we have.
-            val state = calculatePermissionState(Manifest.permission.CAMERA)
+            val state =
+                calculatePermissionState(
+                    activity = activity,
+                    context = context,
+                    permission = Manifest.permission.CAMERA,
+                    hasBeenRequestedBefore = hasCameraPermissionBeenRequested,
+                )
             hasCameraPermissionBeenRequested = true
             onPermissionStateChanged(state)
             if (granted) {
@@ -229,7 +208,13 @@ fun rememberImagePickerLauncher(
 
     val launchCamera = {
         if (!isProcessing) {
-            val state = calculatePermissionState(Manifest.permission.CAMERA)
+            val state =
+                calculatePermissionState(
+                    activity = activity,
+                    context = context,
+                    permission = Manifest.permission.CAMERA,
+                    hasBeenRequestedBefore = hasCameraPermissionBeenRequested,
+                )
             if (state.isGranted) {
                 shouldLaunchCamera = true
             } else {
