@@ -18,6 +18,7 @@ kotlinxCoroutines = "1.7.3"
 ktlint = "12.1.1"
 detekt = "1.23.6"
 easycrop = "0.1.1"
+media3 = "1.11.1"
 vanniktechPublish = "0.37.0"
 
 [libraries]
@@ -45,6 +46,7 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 easycrop = { group = "io.github.mr0xf00", name = "easycrop", version.ref = "easycrop" }
+media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
