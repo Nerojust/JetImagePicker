@@ -82,7 +82,10 @@ fun rememberVideoPickerLauncher(
 
     val coroutineScope = rememberCoroutineScope()
 
-    suspend fun processPicked(uri: Uri?) {
+    suspend fun processPicked(
+        uri: Uri?,
+        isCameraCapture: Boolean = false,
+    ) {
         if (uri == null) {
             onVideoPicked(null, null)
             return
@@ -93,6 +96,10 @@ fun rememberVideoPickerLauncher(
             val limitSeconds = config.durationLimitSeconds
             if (VideoUtils.isDurationExceeded(durationSeconds, limitSeconds) && limitSeconds != null) {
                 onDurationExceeded(uri, limitSeconds)
+                // The raw capture is ours and is never returned to the caller on this path -
+                // clean it up now that onDurationExceeded has been notified. Never delete a
+                // gallery-picked uri (not ours to delete).
+                if (isCameraCapture) context.contentResolver.delete(uri, null, null)
                 return
             }
 
@@ -104,6 +111,14 @@ fun rememberVideoPickerLauncher(
             // once superseded. Never delete the caller's original picked/captured uri.
             previousOutputUri?.takeIf { it != uri }?.let { context.contentResolver.delete(it, null, null) }
             previousOutputUri = output.takeIf { it != uri }
+
+            // The raw camera capture is also ours (written to cacheDir in createVideoUri) -
+            // delete it once compression has produced a different, superseding output. Never
+            // delete it when it IS the final returned uri (compression disabled or failed), and
+            // never delete a gallery-picked uri.
+            if (isCameraCapture && output != uri) {
+                context.contentResolver.delete(uri, null, null)
+            }
 
             val thumbnailUri = if (config.enableThumbnail) VideoUtils.extractVideoThumbnail(context, output) else null
             onVideoPicked(output, thumbnailUri)
@@ -127,7 +142,7 @@ fun rememberVideoPickerLauncher(
         rememberLauncherForActivityResult(captureContract) { success ->
             val capturedUri = tempCameraUri
             if (success && capturedUri != null) {
-                coroutineScope.launch { processPicked(capturedUri) }
+                coroutineScope.launch { processPicked(capturedUri, isCameraCapture = true) }
             } else {
                 // Capture was cancelled/failed - clean up the temp file we created for it.
                 capturedUri?.let { context.contentResolver.delete(it, null, null) }
