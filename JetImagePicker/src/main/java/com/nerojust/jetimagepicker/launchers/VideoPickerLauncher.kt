@@ -96,33 +96,39 @@ fun rememberVideoPickerLauncher(
             val limitSeconds = config.durationLimitSeconds
             if (VideoUtils.isDurationExceeded(durationSeconds, limitSeconds) && limitSeconds != null) {
                 onDurationExceeded(uri, limitSeconds)
-                // The raw capture is ours and is never returned to the caller on this path -
-                // clean it up now that onDurationExceeded has been notified. Never delete a
-                // gallery-picked uri (not ours to delete).
-                if (isCameraCapture) context.contentResolver.delete(uri, null, null)
+                // Nothing supersedes the raw capture on this path (it is never returned to the
+                // caller), so clean it up now that onDurationExceeded has been notified. Never
+                // delete a gallery-picked uri (not ours to delete).
+                if (VideoUtils.shouldDeleteSource(isCameraCapture, uri, output = null)) {
+                    context.contentResolver.delete(uri, null, null)
+                }
                 return
             }
 
             onLoadingChanged(true)
-            val output = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
-            onLoadingChanged(false)
+            try {
+                val output = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
 
-            // A compressed output is ours (written to cacheDir via FileProvider) - safe to delete
-            // once superseded. Never delete the caller's original picked/captured uri.
-            previousOutputUri?.takeIf { it != uri }?.let { context.contentResolver.delete(it, null, null) }
-            previousOutputUri = output.takeIf { it != uri }
+                // A compressed output is ours (written to cacheDir via FileProvider) - safe to
+                // delete once superseded. Never delete the caller's original picked/captured uri.
+                previousOutputUri?.takeIf { it != uri }?.let { context.contentResolver.delete(it, null, null) }
+                previousOutputUri = output.takeIf { it != uri }
 
-            // The raw camera capture is also ours (written to cacheDir in createVideoUri) -
-            // delete it once compression has produced a different, superseding output. Never
-            // delete it when it IS the final returned uri (compression disabled or failed), and
-            // never delete a gallery-picked uri.
-            if (isCameraCapture && output != uri) {
-                context.contentResolver.delete(uri, null, null)
+                // The raw camera capture is also ours (written to cacheDir in createVideoUri) -
+                // delete it once compression has produced a different, superseding output.
+                if (VideoUtils.shouldDeleteSource(isCameraCapture, uri, output)) {
+                    context.contentResolver.delete(uri, null, null)
+                }
+
+                val thumbnailUri =
+                    if (config.enableThumbnail) VideoUtils.extractVideoThumbnail(context, output) else null
+                onVideoPicked(output, thumbnailUri)
+                Log.d("JetImagePicker", "Video ready: $output, thumbnail: $thumbnailUri")
+            } finally {
+                // Guaranteed on every exit path once loading started, so the caller's spinner
+                // can't stick on after a failure.
+                onLoadingChanged(false)
             }
-
-            val thumbnailUri = if (config.enableThumbnail) VideoUtils.extractVideoThumbnail(context, output) else null
-            onVideoPicked(output, thumbnailUri)
-            Log.d("JetImagePicker", "Video ready: $output, thumbnail: $thumbnailUri")
         } finally {
             isProcessing = false
         }
@@ -137,7 +143,10 @@ fun rememberVideoPickerLauncher(
             coroutineScope.launch { processPicked(uri) }
         }
 
-    val captureContract = remember(config.durationLimitSeconds) { CaptureVideoWithDurationLimit(config.durationLimitSeconds) }
+    val captureContract =
+        remember(config.durationLimitSeconds) {
+            CaptureVideoWithDurationLimit(config.durationLimitSeconds)
+        }
     val cameraLauncher =
         rememberLauncherForActivityResult(captureContract) { success ->
             val capturedUri = tempCameraUri

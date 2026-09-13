@@ -222,7 +222,10 @@ result, nothing picked.
 
 ---
 
-## 🎥 Video (v2.1)
+## 🎥 Video
+
+> Video support is on `main` and not yet part of a published release — the install snippet above
+> pins the latest released version, which is image-only.
 
 Pick or capture video with `rememberJetVideoPickerState` — a separate API from the image picker,
 so you wire it up independently:
@@ -251,6 +254,13 @@ Button(onClick = videoPickerState.captureWithCamera) { Text("Capture Video") }
 
 Camera capture only requests `CAMERA` — the system camera app handles audio recording under its
 own permission, so no `RECORD_AUDIO` request happens here either.
+
+**Dependency footprint:** video support pulls in
+[Media3 Transformer](https://developer.android.com/media/media3/transformer) (ExoPlayer's
+decode/encode stack) for compression — a meaningful addition to the dependency tree even if you
+only ever use the image picker. It comes in as a regular `implementation` dependency of the
+library, so it's on your runtime classpath either way; R8/minification strips the unused code from
+release builds of image-only apps.
 
 ---
 

@@ -113,7 +113,8 @@ object Utils {
         filenamePrefix: String = "CROP",
     ): Uri? =
         try {
-            val file = File(context.cacheDir, "${filenamePrefix}_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+            val filename = "${filenamePrefix}_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg"
+            val file = File(context.cacheDir, filename)
             FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, MAX_QUALITY, it) }
             FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         } catch (e: Exception) {
