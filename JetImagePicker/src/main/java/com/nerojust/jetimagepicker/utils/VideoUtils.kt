@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -127,6 +128,11 @@ object VideoUtils {
                     File(context.cacheDir, "COMP_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4")
                 val transformer =
                     Transformer.Builder(context)
+                        // Without an explicit target codec, Transformer takes a lossless
+                        // remux/copy fast path whenever the input is already a supported
+                        // format - producing a same-size "compressed" file. Forcing H.264
+                        // guarantees an actual decode+encode pass.
+                        .setVideoMimeType(MimeTypes.VIDEO_H264)
                         .addListener(
                             object : Transformer.Listener {
                                 override fun onCompleted(
