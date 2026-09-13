@@ -34,6 +34,13 @@ import com.nerojust.jetimagepicker.state.rememberJetVideoPickerState
 import com.nerojust.jetimagepicker.ui.ImagePreview
 
 private const val DEMO_DURATION_LIMIT_SECONDS = 30
+private const val BYTES_PER_KB = 1024.0
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes < 0) return "unknown size"
+    val kb = bytes / BYTES_PER_KB
+    return if (kb < BYTES_PER_KB) "%.0f KB".format(kb) else "%.1f MB".format(kb / BYTES_PER_KB)
+}
 
 @Composable
 private fun LabeledSwitch(
@@ -182,9 +189,21 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
             ImagePreview(uri = uri, contentDescription = "Video thumbnail")
         }
 
-        pickerState.selectedVideoUri?.let {
+        pickerState.selectedVideoUri?.let { uri ->
             Text(
-                text = "Video: $it",
+                text = "Video: $uri",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            val videoSize =
+                remember(uri) {
+                    val bytes = context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+                    formatFileSize(bytes)
+                }
+            val sizeCaption = if (enableCompression) "compressed" else "original"
+            Text(
+                text = "Size: $videoSize ($sizeCaption)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
