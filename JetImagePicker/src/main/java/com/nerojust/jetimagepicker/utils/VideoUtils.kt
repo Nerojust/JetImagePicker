@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.coroutines.resume
 
 private const val MILLIS_PER_SECOND = 1000L
 
@@ -109,7 +110,7 @@ object VideoUtils {
                                             "${context.packageName}.provider",
                                             outputFile,
                                         )
-                                    if (continuation.isActive) continuation.resume(resultUri) {}
+                                    if (continuation.isActive) continuation.resume(resultUri)
                                 }
 
                                 override fun onError(
@@ -118,7 +119,7 @@ object VideoUtils {
                                     exportException: ExportException,
                                 ) {
                                     Log.e("JetImagePicker", "Video compression failed", exportException)
-                                    if (continuation.isActive) continuation.resume(null) {}
+                                    if (continuation.isActive) continuation.resume(null)
                                 }
                             },
                         )
