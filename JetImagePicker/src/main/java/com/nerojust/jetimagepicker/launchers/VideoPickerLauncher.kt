@@ -3,57 +3,33 @@ package com.nerojust.jetimagepicker.launchers
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.core.content.FileProvider
 import com.nerojust.jetimagepicker.config.JetVideoPickerConfig
-import com.nerojust.jetimagepicker.model.PermissionState
+import com.nerojust.jetimagepicker.result.VideoPickerResult
+import com.nerojust.jetimagepicker.result.toPermissionsRequiredOrNull
+import com.nerojust.jetimagepicker.ui.RecordVideoDialog
 import com.nerojust.jetimagepicker.utils.VideoUtils
 import kotlinx.coroutines.launch
 
 /**
- * A custom [ActivityResultContract] wrapping [MediaStore.ACTION_VIDEO_CAPTURE], since the stock
- * [ActivityResultContracts.CaptureVideo] contract has no way to pass [MediaStore.EXTRA_DURATION_LIMIT].
- */
-private class CaptureVideoWithDurationLimit(
-    private val durationLimitSeconds: Int?,
-) : ActivityResultContract<Uri, Boolean>() {
-    override fun createIntent(
-        context: Context,
-        input: Uri,
-    ): Intent =
-        Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
-            putExtra(MediaStore.EXTRA_OUTPUT, input)
-            durationLimitSeconds?.let { putExtra(MediaStore.EXTRA_DURATION_LIMIT, it) }
-            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        }
-
-    override fun parseResult(
-        resultCode: Int,
-        intent: Intent?,
-    ): Boolean = resultCode == Activity.RESULT_OK
-}
-
-/**
- * Sets up the gallery and camera activity-result launchers backing
+ * Sets up the gallery picker and in-app camera recorder backing
  * [com.nerojust.jetimagepicker.state.rememberJetVideoPickerState]. Gallery picking uses Android's
  * Photo Picker (video-only) and requires no permission; camera capture requests
- * `android.Manifest.permission.CAMERA` at runtime — the system camera app itself handles audio
- * recording under its own permission, so no `RECORD_AUDIO` request is needed here.
+ * `android.Manifest.permission.CAMERA` + `android.Manifest.permission.RECORD_AUDIO` together and
+ * records in-app via [RecordVideoDialog], so [JetVideoPickerConfig.durationLimitSeconds] is
+ * enforced live rather than depending on the system camera app to honor a request it can ignore.
  *
  * @return A pair of (launchGallery, launchCamera) functions.
  */
@@ -63,18 +39,16 @@ fun rememberVideoPickerLauncher(
     config: JetVideoPickerConfig = JetVideoPickerConfig(),
     onVideoPicked: (uri: Uri?, thumbnailUri: Uri?) -> Unit,
     onDurationExceeded: (Uri, Int) -> Unit,
-    onPermissionStateChanged: (PermissionState) -> Unit,
+    onPermissionsRequired: (VideoPickerResult.PermissionsRequired) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
 ): Pair<() -> Unit, () -> Unit> {
     val activity =
         context as? Activity
             ?: throw IllegalStateException("Context must be an Activity")
 
-    var tempCameraUri by rememberSaveable(stateSaver = NullableUriSaver) {
-        mutableStateOf<Uri?>(null)
-    }
-    var shouldLaunchCamera by remember { mutableStateOf(false) }
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
+    var hasAudioPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
+    var showRecordDialog by remember { mutableStateOf(false) }
     var previousOutputUri by remember { mutableStateOf<Uri?>(null) }
     // ponytail: boolean gate, not a mutex - fully serializes pick-and-process cycles, same
     // pattern as ImagePickerLauncher's isProcessing.
@@ -114,8 +88,8 @@ fun rememberVideoPickerLauncher(
                 previousOutputUri?.takeIf { it != uri }?.let { context.contentResolver.delete(it, null, null) }
                 previousOutputUri = output.takeIf { it != uri }
 
-                // The raw camera capture is also ours (written to cacheDir in createVideoUri) -
-                // delete it once compression has produced a different, superseding output.
+                // The raw camera capture is also ours - delete it once compression has produced
+                // a different, superseding output.
                 if (VideoUtils.shouldDeleteSource(isCameraCapture, uri, output)) {
                     context.contentResolver.delete(uri, null, null)
                 }
@@ -143,48 +117,31 @@ fun rememberVideoPickerLauncher(
             coroutineScope.launch { processPicked(uri) }
         }
 
-    val captureContract =
-        remember(config.durationLimitSeconds) {
-            CaptureVideoWithDurationLimit(config.durationLimitSeconds)
-        }
-    val cameraLauncher =
-        rememberLauncherForActivityResult(captureContract) { success ->
-            val capturedUri = tempCameraUri
-            if (success && capturedUri != null) {
-                coroutineScope.launch { processPicked(capturedUri, isCameraCapture = true) }
-            } else {
-                // Capture was cancelled/failed - clean up the temp file we created for it.
-                capturedUri?.let { context.contentResolver.delete(it, null, null) }
-                tempCameraUri = null
-                coroutineScope.launch { onVideoPicked(null, null) }
-            }
-        }
-
-    val cameraPermissionLauncher =
-        rememberLauncherForActivityResult(RequestPermission()) { granted ->
-            val state =
+    val multiplePermissionsLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+            val cameraState =
                 calculatePermissionState(
                     activity = activity,
                     context = context,
                     permission = Manifest.permission.CAMERA,
                     hasBeenRequestedBefore = hasCameraPermissionBeenRequested,
                 )
+            val audioState =
+                calculatePermissionState(
+                    activity = activity,
+                    context = context,
+                    permission = Manifest.permission.RECORD_AUDIO,
+                    hasBeenRequestedBefore = hasAudioPermissionBeenRequested,
+                )
             hasCameraPermissionBeenRequested = true
-            onPermissionStateChanged(state)
-            if (granted) {
-                shouldLaunchCamera = true
+            hasAudioPermissionBeenRequested = true
+            val permissionsRequired = toPermissionsRequiredOrNull(cameraState, audioState)
+            if (permissionsRequired != null) {
+                onPermissionsRequired(permissionsRequired)
+            } else {
+                showRecordDialog = true
             }
         }
-
-    // Defer camera launch to avoid re-entry issues
-    LaunchedEffect(shouldLaunchCamera) {
-        if (shouldLaunchCamera) {
-            shouldLaunchCamera = false
-            val uri = VideoUtils.createVideoUri(context)
-            tempCameraUri = uri
-            cameraLauncher.launch(uri)
-        }
-    }
 
     val launchGallery = {
         if (!isProcessing) {
@@ -195,19 +152,39 @@ fun rememberVideoPickerLauncher(
 
     val launchCamera = {
         if (!isProcessing) {
-            val state =
+            val cameraState =
                 calculatePermissionState(
                     activity = activity,
                     context = context,
                     permission = Manifest.permission.CAMERA,
                     hasBeenRequestedBefore = hasCameraPermissionBeenRequested,
                 )
-            if (state.isGranted) {
-                shouldLaunchCamera = true
+            val audioState =
+                calculatePermissionState(
+                    activity = activity,
+                    context = context,
+                    permission = Manifest.permission.RECORD_AUDIO,
+                    hasBeenRequestedBefore = hasAudioPermissionBeenRequested,
+                )
+            if (cameraState.isGranted && audioState.isGranted) {
+                showRecordDialog = true
             } else {
-                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                multiplePermissionsLauncher.launch(
+                    arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+                )
             }
         }
+    }
+
+    if (showRecordDialog) {
+        RecordVideoDialog(
+            durationLimitSeconds = config.durationLimitSeconds,
+            onFinished = { file ->
+                showRecordDialog = false
+                val uri = file?.let { FileProvider.getUriForFile(context, "${context.packageName}.provider", it) }
+                coroutineScope.launch { processPicked(uri, isCameraCapture = true) }
+            },
+        )
     }
 
     return Pair(launchGallery, launchCamera)

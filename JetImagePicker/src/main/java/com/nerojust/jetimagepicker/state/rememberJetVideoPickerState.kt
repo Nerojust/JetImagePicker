@@ -13,7 +13,6 @@ import com.nerojust.jetimagepicker.config.JetVideoPickerConfig
 import com.nerojust.jetimagepicker.launchers.NullableUriSaver
 import com.nerojust.jetimagepicker.launchers.rememberVideoPickerLauncher
 import com.nerojust.jetimagepicker.result.VideoPickerResult
-import com.nerojust.jetimagepicker.result.toVideoPickerResult
 
 /**
  * Creates and remembers a [JetVideoPickerState] for picking video from the gallery or capturing
@@ -49,9 +48,10 @@ fun rememberJetVideoPickerState(
             onDurationExceeded = { uri, limitSeconds ->
                 onResult(VideoPickerResult.DurationExceeded(uri, limitSeconds))
             },
-            onPermissionStateChanged = { permissionState ->
-                permissionState.toVideoPickerResult()?.let(onResult)
-            },
+            // ponytail: temporary pass-through until Task 6 gives this state layer its own
+            // onPermissionsRequired wiring — Function1 parameter contravariance lets onResult
+            // (VideoPickerResult) -> Unit stand in directly for (PermissionsRequired) -> Unit.
+            onPermissionsRequired = onResult,
             onLoadingChanged = { loading -> isLoading = loading },
         )
 
