@@ -86,6 +86,12 @@ internal fun RecordVideoDialog(
             provider.unbindAll()
             provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
         }.onFailure { e ->
+            // Must not treat coroutine cancellation (e.g. the dialog leaving composition after
+            // the user tapped Cancel while awaitInstance was still suspended) as a camera
+            // failure - runCatching catches Throwable unconditionally, so CancellationException
+            // has to be rethrown to keep normal structured-cancellation propagation and avoid
+            // calling onFinished(null) a second time here.
+            if (e is kotlinx.coroutines.CancellationException) throw e
             // Can throw InitializationException (no camera hardware) from awaitInstance, or
             // IllegalArgumentException (unsupported use-case combination) from bindToLifecycle -
             // both must degrade to onFinished(null) rather than crash the host app.
