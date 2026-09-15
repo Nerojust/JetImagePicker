@@ -242,9 +242,7 @@ val videoPickerState = rememberJetVideoPickerState(
     when (result) {
         is VideoPickerResult.Success -> { /* result.uri, result.thumbnailUri */ }
         is VideoPickerResult.DurationExceeded -> { /* result.uri exceeded result.limitSeconds */ }
-        is VideoPickerResult.PermissionDenied -> { /* ... */ }
-        is VideoPickerResult.PermissionPermanentlyDenied -> { /* ... */ }
-        is VideoPickerResult.ShowRationale -> { /* ... */ }
+        is VideoPickerResult.PermissionsRequired -> { /* result.denied, result.permanentlyDenied, result.shouldShowRationaleFor */ }
     }
 }
 
@@ -252,8 +250,10 @@ Button(onClick = videoPickerState.pickFromGallery) { Text("Pick Video") }
 Button(onClick = videoPickerState.captureWithCamera) { Text("Capture Video") }
 ```
 
-Camera capture only requests `CAMERA` — the system camera app handles audio recording under its
-own permission, so no `RECORD_AUDIO` request happens here either.
+Camera capture now records in-app via CameraX instead of handing off to the system camera app —
+this is what lets `durationLimitSeconds` be enforced exactly, rather than depending on the
+device's camera app to honor a request it's free to ignore. It requests both `CAMERA` and
+`RECORD_AUDIO` together.
 
 **Dependency footprint:** video support pulls in
 [Media3 Transformer](https://developer.android.com/media/media3/transformer) (ExoPlayer's

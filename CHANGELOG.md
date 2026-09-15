@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Video camera capture now records in-app via CameraX instead of launching the system camera app,
+  so `JetVideoPickerConfig.durationLimitSeconds` is actually enforced (the previous
+  `MediaStore.EXTRA_DURATION_LIMIT` approach was only a request some camera apps ignored).
+  Capture now requests both `CAMERA` and `RECORD_AUDIO` permissions.
+
+### Removed
+- `VideoPickerResult.PermissionDenied`, `PermissionPermanentlyDenied`, and `ShowRationale` —
+  replaced by `VideoPickerResult.PermissionsRequired(denied, permanentlyDenied,
+  shouldShowRationaleFor)`, since camera capture now requests two permissions at once. This is a
+  breaking change to the video API surface; the video feature has not been part of a published
+  release yet.
+
 ## [2.1.0] - <fill in on release>
 
 ### Added
