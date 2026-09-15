@@ -48,10 +48,9 @@ fun rememberJetVideoPickerState(
             onDurationExceeded = { uri, limitSeconds ->
                 onResult(VideoPickerResult.DurationExceeded(uri, limitSeconds))
             },
-            // ponytail: temporary pass-through until Task 6 gives this state layer its own
-            // onPermissionsRequired wiring — Function1 parameter contravariance lets onResult
-            // (VideoPickerResult) -> Unit stand in directly for (PermissionsRequired) -> Unit.
-            onPermissionsRequired = onResult,
+            onPermissionsRequired = { permissionsRequired ->
+                onResult(permissionsRequired)
+            },
             onLoadingChanged = { loading -> isLoading = loading },
         )
 

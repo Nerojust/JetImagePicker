@@ -23,19 +23,3 @@ fun toPermissionsRequiredOrNull(
         shouldShowRationaleFor = shouldShowRationaleFor,
     )
 }
-
-/**
- * Temporary bridge for sequencing Tasks 2→6: maps a single [PermissionState] to
- * [VideoPickerResult.PermissionsRequired] format (three independent lists). Removed
- * once Task 6 updates [com.nerojust.jetimagepicker.state.rememberJetVideoPickerState]
- * to call the new [toPermissionsRequiredOrNull] directly.
- */
-@Deprecated("Temporary bridge for Task 2->6 sequencing; removed once rememberJetVideoPickerState.kt stops calling it in Task 6.")
-internal fun PermissionState.toVideoPickerResult(): VideoPickerResult? {
-    if (isGranted) return null
-    return VideoPickerResult.PermissionsRequired(
-        denied = if (isDenied) listOf(permission) else emptyList(),
-        permanentlyDenied = if (isPermanentlyDenied) listOf(permission) else emptyList(),
-        shouldShowRationaleFor = if (shouldShowRationale) listOf(permission) else emptyList(),
-    )
-}
