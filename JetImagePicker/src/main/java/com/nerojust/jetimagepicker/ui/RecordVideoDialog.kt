@@ -79,11 +79,19 @@ internal fun RecordVideoDialog(
     }
 
     LaunchedEffect(Unit) {
-        val provider = ProcessCameraProvider.awaitInstance(context)
-        cameraProvider = provider
-        val preview = Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
-        provider.unbindAll()
-        provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
+        runCatching {
+            val provider = ProcessCameraProvider.awaitInstance(context)
+            cameraProvider = provider
+            val preview = Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
+            provider.unbindAll()
+            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
+        }.onFailure { e ->
+            // Can throw InitializationException (no camera hardware) from awaitInstance, or
+            // IllegalArgumentException (unsupported use-case combination) from bindToLifecycle -
+            // both must degrade to onFinished(null) rather than crash the host app.
+            Log.e("JetImagePicker", "Failed to initialize camera", e)
+            onFinished(null)
+        }
     }
 
     DisposableEffect(Unit) {
@@ -111,28 +119,38 @@ internal fun RecordVideoDialog(
         isCancelled = false
         elapsedSeconds = 0L
         val file = VideoUtils.createVideoFile(context)
-        val pendingRecording =
-            recorder.prepareRecording(context, FileOutputOptions.Builder(file).build()).withAudioEnabled()
-        recording =
-            pendingRecording.start(ContextCompat.getMainExecutor(context)) { event ->
-                if (event is VideoRecordEvent.Finalize) {
-                    isRecording = false
-                    recording = null
-                    when {
-                        isCancelled -> {
-                            if (file.exists()) file.delete()
-                            onFinished(null)
+        runCatching {
+            recorder
+                .prepareRecording(context, FileOutputOptions.Builder(file).build())
+                .withAudioEnabled()
+                .start(ContextCompat.getMainExecutor(context)) { event ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        isRecording = false
+                        recording = null
+                        when {
+                            isCancelled -> {
+                                if (file.exists()) file.delete()
+                                onFinished(null)
+                            }
+                            event.hasError() -> {
+                                Log.e("JetImagePicker", "Video recording failed: ${event.error}")
+                                if (file.exists()) file.delete()
+                                onFinished(null)
+                            }
+                            else -> onFinished(file)
                         }
-                        event.hasError() -> {
-                            Log.e("JetImagePicker", "Video recording failed: ${event.error}")
-                            if (file.exists()) file.delete()
-                            onFinished(null)
-                        }
-                        else -> onFinished(file)
                     }
                 }
-            }
-        isRecording = true
+        }.onSuccess { newRecording ->
+            recording = newRecording
+            isRecording = true
+        }.onFailure { e ->
+            // e.g. SecurityException if RECORD_AUDIO somehow isn't actually granted despite the
+            // upstream permission check - must degrade to onFinished(null), not crash.
+            Log.e("JetImagePicker", "Failed to start video recording", e)
+            if (file.exists()) file.delete()
+            onFinished(null)
+        }
     }
 
     Dialog(
