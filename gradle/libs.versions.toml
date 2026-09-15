@@ -19,6 +19,7 @@ ktlint = "12.1.1"
 detekt = "1.23.6"
 easycrop = "0.1.1"
 media3 = "1.11.1"
+cameraX = "1.6.2"
 vanniktechPublish = "0.37.0"
 
 [libraries]
@@ -47,6 +48,11 @@ junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 easycrop = { group = "io.github.mr0xf00", name = "easycrop", version.ref = "easycrop" }
 media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraX" }
+camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraX" }
+camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraX" }
+camera-video = { group = "androidx.camera", name = "camera-video", version.ref = "cameraX" }
+camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraX" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
