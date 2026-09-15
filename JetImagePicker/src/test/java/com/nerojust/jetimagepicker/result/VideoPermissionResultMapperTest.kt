@@ -102,8 +102,4 @@ class VideoPermissionResultMapperTest {
             result,
         )
     }
-
-
-
-
 }

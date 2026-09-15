@@ -262,6 +262,21 @@ only ever use the image picker. It comes in as a regular `implementation` depend
 library, so it's on your runtime classpath either way; R8/minification strips the unused code from
 release builds of image-only apps.
 
+**Permission footprint:** the library's manifest declares `CAMERA` and `RECORD_AUDIO`, and manifest
+merger folds both into *every* consuming app — including apps that only use the image picker. That
+surfaces as "Camera" and "Microphone" on your Play Store listing. Both are declared alongside
+`<uses-feature android:required="false" />` so no device is filtered out of installing your app. If
+you're certain your app never calls `captureWithCamera()` on the video API, you can strip either
+permission with a manifest merger override in your own `AndroidManifest.xml`:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+</manifest>
+```
+
 ---
 
 ## 📦 Configuration Options

@@ -14,6 +14,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,12 +36,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.nerojust.jetimagepicker.utils.VideoUtils
-import kotlinx.coroutines.delay
 import java.io.File
+
+private const val NANOS_PER_SECOND = 1_000_000_000L
 
 /**
  * Full-screen in-app video recording dialog, shown automatically by
@@ -60,6 +62,10 @@ internal fun RecordVideoDialog(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val previewView = remember { PreviewView(context) }
+    val preview =
+        remember {
+            Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
+        }
     val recorder = remember { Recorder.Builder().build() }
     val videoCapture = remember { VideoCapture.withOutput(recorder) }
 
@@ -82,8 +88,9 @@ internal fun RecordVideoDialog(
         runCatching {
             val provider = ProcessCameraProvider.awaitInstance(context)
             cameraProvider = provider
-            val preview = Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
-            provider.unbindAll()
+            // Only unbind this dialog's own use cases - unbindAll() would silently kill any
+            // CameraX use cases the consuming app has bound elsewhere and never rebind them.
+            provider.unbind(preview, videoCapture)
             provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
         }.onFailure { e ->
             // Must not treat coroutine cancellation (e.g. the dialog leaving composition after
@@ -107,17 +114,7 @@ internal fun RecordVideoDialog(
             // composition) - the async Finalize callback below may still fire onFinished after
             // disposal in that edge case. Acceptable for v1; revisit if it causes issues.
             recording?.stop()
-            cameraProvider?.unbindAll()
-        }
-    }
-
-    LaunchedEffect(isRecording) {
-        while (isRecording) {
-            delay(1000)
-            elapsedSeconds += 1
-            if (VideoUtils.shouldStopRecording(elapsedSeconds, durationLimitSeconds)) {
-                recording?.stop()
-            }
+            cameraProvider?.unbind(preview, videoCapture)
         }
     }
 
@@ -130,21 +127,19 @@ internal fun RecordVideoDialog(
                 .prepareRecording(context, FileOutputOptions.Builder(file).build())
                 .withAudioEnabled()
                 .start(ContextCompat.getMainExecutor(context)) { event ->
+                    // Drive the counter and the auto-stop from CameraX's own recording clock:
+                    // a separate wall-clock ticker drifts from the real recorded duration and can
+                    // let a recording overrun the limit, getting the finished file rejected and
+                    // deleted by the downstream isDurationExceeded safety net.
+                    val statsSeconds = event.recordingStats.recordedDurationNanos / NANOS_PER_SECOND
+                    elapsedSeconds = statsSeconds
+                    if (VideoUtils.shouldStopRecording(statsSeconds, durationLimitSeconds)) {
+                        recording?.stop()
+                    }
                     if (event is VideoRecordEvent.Finalize) {
                         isRecording = false
                         recording = null
-                        when {
-                            isCancelled -> {
-                                if (file.exists()) file.delete()
-                                onFinished(null)
-                            }
-                            event.hasError() -> {
-                                Log.e("JetImagePicker", "Video recording failed: ${event.error}")
-                                if (file.exists()) file.delete()
-                                onFinished(null)
-                            }
-                            else -> onFinished(file)
-                        }
+                        handleFinalize(event, file, isCancelled, onFinished)
                     }
                 }
         }.onSuccess { newRecording ->
@@ -166,29 +161,65 @@ internal fun RecordVideoDialog(
         Box(modifier = Modifier.fillMaxSize()) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Button(onClick = { stopAndDiscard() }) {
-                    Text("Cancel")
-                }
+            RecordControls(
+                isRecording = isRecording,
+                elapsedSeconds = elapsedSeconds,
+                onCancel = { stopAndDiscard() },
+                onToggleRecording = { if (isRecording) recording?.stop() else startRecording() },
+            )
+        }
+    }
+}
 
-                Text(
-                    text = "${elapsedSeconds}s",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+/**
+ * Reports the outcome of a finished recording: the [file] is handed back only if the user neither
+ * cancelled nor hit a recording error - otherwise it's deleted, since nothing else will.
+ */
+private fun handleFinalize(
+    event: VideoRecordEvent.Finalize,
+    file: File,
+    isCancelled: Boolean,
+    onFinished: (File?) -> Unit,
+) {
+    if (event.hasError()) {
+        Log.e("JetImagePicker", "Video recording failed: ${event.error}")
+    }
+    if (isCancelled || event.hasError()) {
+        file.delete()
+        onFinished(null)
+    } else {
+        onFinished(file)
+    }
+}
 
-                Button(onClick = { if (isRecording) recording?.stop() else startRecording() }) {
-                    Text(if (isRecording) "Stop" else "Record")
-                }
-            }
+@Composable
+private fun BoxScope.RecordControls(
+    isRecording: Boolean,
+    elapsedSeconds: Long,
+    onCancel: () -> Unit,
+    onToggleRecording: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Button(onClick = onCancel) {
+            Text("Cancel")
+        }
+
+        Text(
+            text = "${elapsedSeconds}s",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        Button(onClick = onToggleRecording) {
+            Text(if (isRecording) "Stop" else "Record")
         }
     }
 }

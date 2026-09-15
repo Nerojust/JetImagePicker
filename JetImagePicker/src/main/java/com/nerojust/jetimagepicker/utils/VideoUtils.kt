@@ -28,16 +28,6 @@ private const val MILLIS_PER_SECOND = 1000L
  * for direct use by consumers.
  */
 object VideoUtils {
-    /** Creates a new empty cache file for a video capture and returns its [FileProvider] URI. */
-    fun createVideoUri(context: Context): Uri {
-        val file =
-            File(
-                context.cacheDir,
-                "VID_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.mp4",
-            )
-        return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-    }
-
     /** Creates a new empty cache file for a CameraX video recording. */
     fun createVideoFile(context: Context): File =
         File(
