@@ -38,6 +38,13 @@ object VideoUtils {
         return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
     }
 
+    /** Creates a new empty cache file for a CameraX video recording. */
+    fun createVideoFile(context: Context): File =
+        File(
+            context.cacheDir,
+            "VID_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.mp4",
+        )
+
     /**
      * Reads the duration of the video at [uri] in whole seconds, or `null` if it can't be read.
      * Runs on [Dispatchers.IO] — [MediaMetadataRetriever] reads the file and can block for a
@@ -70,6 +77,20 @@ object VideoUtils {
     ): Boolean {
         if (durationSeconds == null || limitSeconds == null) return false
         return durationSeconds > limitSeconds
+    }
+
+    /**
+     * True the instant [elapsedSeconds] reaches [limitSeconds] during a live recording; false if
+     * no limit is configured. Distinct from [isDurationExceeded]: this uses `>=` to stop the
+     * recording the moment the limit is hit, while [isDurationExceeded] deliberately uses `>` on
+     * an already-finished video's duration so a video exactly at the limit isn't flagged.
+     */
+    fun shouldStopRecording(
+        elapsedSeconds: Long,
+        limitSeconds: Int?,
+    ): Boolean {
+        if (limitSeconds == null) return false
+        return elapsedSeconds >= limitSeconds
     }
 
     /**

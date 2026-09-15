@@ -53,4 +53,24 @@ class VideoUtilsTest {
         assertFalse(VideoUtils.shouldDeleteSource(isCameraCapture = false, source = "picked", output = "picked"))
         assertFalse(VideoUtils.shouldDeleteSource(isCameraCapture = false, source = "picked", output = null))
     }
+
+    @Test
+    fun `no limit configured never stops`() {
+        assertFalse(VideoUtils.shouldStopRecording(elapsedSeconds = 120, limitSeconds = null))
+    }
+
+    @Test
+    fun `elapsed under limit does not stop`() {
+        assertFalse(VideoUtils.shouldStopRecording(elapsedSeconds = 29, limitSeconds = 30))
+    }
+
+    @Test
+    fun `elapsed exactly at limit stops`() {
+        assertTrue(VideoUtils.shouldStopRecording(elapsedSeconds = 30, limitSeconds = 30))
+    }
+
+    @Test
+    fun `elapsed over limit stops`() {
+        assertTrue(VideoUtils.shouldStopRecording(elapsedSeconds = 31, limitSeconds = 30))
+    }
 }
