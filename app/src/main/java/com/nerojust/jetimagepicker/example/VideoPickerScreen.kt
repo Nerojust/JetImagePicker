@@ -90,16 +90,19 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
                     thumbnailUri = null
                 }
 
-                is VideoPickerResult.PermissionDenied -> {
-                    message = "Permission denied: ${result.permission}"
-                }
-
-                is VideoPickerResult.PermissionPermanentlyDenied -> {
-                    message = "Permission permanently denied: ${result.permission}. Enable in settings."
-                }
-
-                is VideoPickerResult.ShowRationale -> {
-                    message = "Please grant ${result.permission} permission to continue."
+                is VideoPickerResult.PermissionsRequired -> {
+                    message =
+                        buildString {
+                            if (result.denied.isNotEmpty()) {
+                                append("Denied: ${result.denied.joinToString()}. ")
+                            }
+                            if (result.permanentlyDenied.isNotEmpty()) {
+                                append("Permanently denied (enable in settings): ${result.permanentlyDenied.joinToString()}. ")
+                            }
+                            if (result.shouldShowRationaleFor.isNotEmpty()) {
+                                append("Please grant: ${result.shouldShowRationaleFor.joinToString()}.")
+                            }
+                        }.trim()
                 }
             }
         }
