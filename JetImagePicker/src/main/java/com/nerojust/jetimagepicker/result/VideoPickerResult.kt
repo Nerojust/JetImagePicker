@@ -30,12 +30,20 @@ sealed class VideoPickerResult {
      */
     data class DurationExceeded(val uri: Uri, val limitSeconds: Int) : VideoPickerResult()
 
-    /** [permission] was denied for this request; it can still be requested again. */
-    data class PermissionDenied(val permission: String) : VideoPickerResult()
-
-    /** [permission] was permanently denied ("Don't ask again"); direct the user to app settings. */
-    data class PermissionPermanentlyDenied(val permission: String) : VideoPickerResult()
-
-    /** The OS recommends showing a rationale for [permission] before requesting it again. */
-    data class ShowRationale(val permission: String) : VideoPickerResult()
+    /**
+     * One or more permissions required for camera capture (`CAMERA`, `RECORD_AUDIO`) were not
+     * granted. The three lists are independent — a given permission appears in exactly one of
+     * them, since [android.permission] states are mutually exclusive per permission.
+     *
+     * @property denied Permissions denied this round; still re-requestable.
+     * @property permanentlyDenied Permissions denied with "Don't ask again"; direct the user to
+     * app settings.
+     * @property shouldShowRationaleFor Permissions the OS recommends showing a rationale for
+     * before requesting again.
+     */
+    data class PermissionsRequired(
+        val denied: List<String>,
+        val permanentlyDenied: List<String>,
+        val shouldShowRationaleFor: List<String>,
+    ) : VideoPickerResult()
 }
