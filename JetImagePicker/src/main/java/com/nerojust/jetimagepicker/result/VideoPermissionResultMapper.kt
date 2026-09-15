@@ -25,18 +25,17 @@ fun toPermissionsRequiredOrNull(
 }
 
 /**
- * Deprecated: compatibility bridge during Task 2-6 transition. Will be removed in Task 5/6.
- * Maps a single [PermissionState] to a [VideoPickerResult.PermissionsRequired] by wrapping it
- * into a pair of states (current + granted dummy state).
+ * Temporary bridge for sequencing Tasks 2→6: maps a single [PermissionState] to
+ * [VideoPickerResult.PermissionsRequired] format (three independent lists). Removed
+ * once Task 6 updates [com.nerojust.jetimagepicker.state.rememberJetVideoPickerState]
+ * to call the new [toPermissionsRequiredOrNull] directly.
  */
-fun PermissionState.toVideoPickerResult(): VideoPickerResult? {
-    val grantedDummy =
-        PermissionState(
-            permission = "android.permission.RECORD_AUDIO", // arbitrary, won't be used
-            isGranted = true,
-            isDenied = false,
-            isPermanentlyDenied = false,
-            shouldShowRationale = false,
-        )
-    return toPermissionsRequiredOrNull(this, grantedDummy)
+@Deprecated("Temporary bridge for Task 2->6 sequencing; removed once rememberJetVideoPickerState.kt stops calling it in Task 6.")
+internal fun PermissionState.toVideoPickerResult(): VideoPickerResult? {
+    if (isGranted) return null
+    return VideoPickerResult.PermissionsRequired(
+        denied = if (isDenied) listOf(permission) else emptyList(),
+        permanentlyDenied = if (isPermanentlyDenied) listOf(permission) else emptyList(),
+        shouldShowRationaleFor = if (shouldShowRationale) listOf(permission) else emptyList(),
+    )
 }

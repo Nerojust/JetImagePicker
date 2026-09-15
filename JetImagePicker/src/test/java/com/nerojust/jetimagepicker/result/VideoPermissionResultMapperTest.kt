@@ -102,4 +102,55 @@ class VideoPermissionResultMapperTest {
             result,
         )
     }
+
+    // Bridge function tests (for temporary toVideoPickerResult() compatibility layer)
+
+    @Test
+    fun `bridge - granted permission produces no result`() {
+        val state = grantedState("android.permission.CAMERA")
+        val result = state.toVideoPickerResult()
+        assertNull(result)
+    }
+
+    @Test
+    fun `bridge - denied permission maps to PermissionsRequired with denied list`() {
+        val state = deniedState("android.permission.CAMERA")
+        val result = state.toVideoPickerResult()
+        assertEquals(
+            VideoPickerResult.PermissionsRequired(
+                denied = listOf("android.permission.CAMERA"),
+                permanentlyDenied = emptyList(),
+                shouldShowRationaleFor = emptyList(),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `bridge - permanently denied permission maps to PermissionsRequired with permanentlyDenied list`() {
+        val state = permanentlyDeniedState("android.permission.CAMERA")
+        val result = state.toVideoPickerResult()
+        assertEquals(
+            VideoPickerResult.PermissionsRequired(
+                denied = emptyList(),
+                permanentlyDenied = listOf("android.permission.CAMERA"),
+                shouldShowRationaleFor = emptyList(),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `bridge - should show rationale maps to PermissionsRequired with shouldShowRationaleFor list`() {
+        val state = rationaleState("android.permission.CAMERA")
+        val result = state.toVideoPickerResult()
+        assertEquals(
+            VideoPickerResult.PermissionsRequired(
+                denied = emptyList(),
+                permanentlyDenied = emptyList(),
+                shouldShowRationaleFor = listOf("android.permission.CAMERA"),
+            ),
+            result,
+        )
+    }
 }
