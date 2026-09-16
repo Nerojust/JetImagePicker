@@ -127,7 +127,12 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
         LabeledSwitch(
             label = if (enableCompression) "Compression on" else "Compression off",
             checked = enableCompression,
-            onCheckedChange = { enableCompression = it },
+            onCheckedChange = {
+                enableCompression = it
+                pickerState.clearSelection()
+                thumbnailUri = null
+                message = null
+            },
         )
         LabeledSwitch(
             label = if (enableThumbnail) "Thumbnail on" else "Thumbnail off",
