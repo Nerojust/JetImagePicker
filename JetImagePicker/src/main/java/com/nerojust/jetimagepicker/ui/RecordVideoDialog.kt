@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -164,6 +165,8 @@ internal fun RecordVideoDialog(
         Box(modifier = Modifier.fillMaxSize()) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
+            AppNameLabel()
+
             RecordControls(
                 isRecording = isRecording,
                 elapsedSeconds = elapsedSeconds,
@@ -193,6 +196,22 @@ private fun handleFinalize(
     } else {
         onFinished(file)
     }
+}
+
+@Composable
+private fun BoxScope.AppNameLabel() {
+    Text(
+        text = "JetImagePicker",
+        color = Color.White,
+        style = MaterialTheme.typography.titleMedium,
+        textAlign = TextAlign.Center,
+        modifier =
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(16.dp),
+    )
 }
 
 @Composable
