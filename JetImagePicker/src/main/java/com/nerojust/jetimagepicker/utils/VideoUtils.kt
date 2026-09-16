@@ -8,9 +8,11 @@ import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -22,6 +24,12 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 private const val MILLIS_PER_SECOND = 1000L
+
+// Phone-camera video routinely records at 10-50+ Mbps; this is a fixed, deliberately
+// conservative target for meaningfully smaller output while staying watchable for casual
+// short-form video. Not user-configurable in v1 (see JetVideoPickerConfig.enableCompression's
+// KDoc) - revisit if a size/quality knob is ever added.
+private const val COMPRESSED_VIDEO_BITRATE = 2_000_000
 
 /**
  * Internal video file/metadata helpers backing [rememberVideoPickerLauncher]. Not intended
@@ -144,6 +152,19 @@ object VideoUtils {
                         // format - producing a same-size "compressed" file. Forcing H.264
                         // guarantees an actual decode+encode pass.
                         .setVideoMimeType(MimeTypes.VIDEO_H264)
+                        // Forcing the codec alone isn't enough: DefaultEncoderFactory reuses the
+                        // SOURCE video's own bitrate whenever one isn't explicitly requested, so
+                        // the "re-encode" came out the same size as the original. An explicit
+                        // target bitrate is required to actually shrink the file.
+                        .setEncoderFactory(
+                            DefaultEncoderFactory.Builder(context)
+                                .setRequestedVideoEncoderSettings(
+                                    VideoEncoderSettings.Builder()
+                                        .setBitrate(COMPRESSED_VIDEO_BITRATE)
+                                        .build(),
+                                )
+                                .build(),
+                        )
                         .addListener(
                             object : Transformer.Listener {
                                 override fun onCompleted(
