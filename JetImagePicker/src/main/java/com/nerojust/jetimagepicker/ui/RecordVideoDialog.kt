@@ -11,6 +11,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -208,7 +211,11 @@ private fun BoxScope.RecordControls(
                 .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Button(onClick = onCancel) {
+        OutlinedButton(
+            onClick = onCancel,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            border = BorderStroke(1.dp, Color.White),
+        ) {
             Text("Cancel")
         }
 
@@ -218,7 +225,12 @@ private fun BoxScope.RecordControls(
             style = MaterialTheme.typography.titleMedium,
         )
 
-        Button(onClick = onToggleRecording) {
+        // A red record/stop control is the universal camera-app convention, and stays visually
+        // distinct from Cancel regardless of the host app's own theme colors.
+        Button(
+            onClick = onToggleRecording,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+        ) {
             Text(if (isRecording) "Stop" else "Record")
         }
     }
