@@ -67,6 +67,7 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
     var enableCompression by remember { mutableStateOf(true) }
     var enableThumbnail by remember { mutableStateOf(true) }
     var enforceDurationLimit by remember { mutableStateOf(false) }
+    var enableTrim by remember { mutableStateOf(false) }
 
     val pickerState =
         rememberJetVideoPickerState(
@@ -76,6 +77,7 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
                     enableCompression = enableCompression,
                     enableThumbnail = enableThumbnail,
                     durationLimitSeconds = if (enforceDurationLimit) DEMO_DURATION_LIMIT_SECONDS else null,
+                    enableTrim = enableTrim,
                 ),
         ) { result ->
             when (result) {
@@ -143,6 +145,11 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
             label = if (enforceDurationLimit) "Duration limit: ${DEMO_DURATION_LIMIT_SECONDS}s" else "No duration limit",
             checked = enforceDurationLimit,
             onCheckedChange = { enforceDurationLimit = it },
+        )
+        LabeledSwitch(
+            label = if (enableTrim) "Trim on" else "Trim off",
+            checked = enableTrim,
+            onCheckedChange = { enableTrim = it },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

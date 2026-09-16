@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `JetVideoPickerConfig.enableTrim` — an optional trim screen shown automatically after
+  pick/capture, before the duration-limit check, letting a user cut a video down (including to
+  rescue one that's over the configured limit — most relevant for gallery picks, since in-app
+  camera capture already auto-stops at the limit). Cancelling the trim screen cancels the whole
+  pick/capture, mirroring the image picker's crop-cancel behavior.
+
 ### Changed
 - Video camera capture now records in-app via CameraX instead of launching the system camera app,
   so `JetVideoPickerConfig.durationLimitSeconds` is actually enforced (the previous

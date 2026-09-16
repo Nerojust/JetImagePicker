@@ -24,7 +24,10 @@ sealed class VideoPickerResult {
      * after this result is delivered** — it is the library's own temporary capture, so read any
      * metadata you need (e.g. via `MediaMetadataRetriever`) synchronously inside the callback and
      * do not persist the uri for later use. For a gallery-picked video the uri stays valid: it
-     * isn't owned by this library and is never deleted.
+     * isn't owned by this library and is never deleted. When
+     * [com.nerojust.jetimagepicker.config.JetVideoPickerConfig.enableTrim] is on and the trimmed
+     * result is still over the limit, [uri] is a library-owned trimmed copy that is likewise
+     * deleted immediately after this callback returns — do not hold onto it either.
      * @property limitSeconds The configured
      * [com.nerojust.jetimagepicker.config.JetVideoPickerConfig.durationLimitSeconds] that was exceeded.
      */

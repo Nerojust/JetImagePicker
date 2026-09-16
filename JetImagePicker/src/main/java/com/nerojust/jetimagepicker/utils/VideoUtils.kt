@@ -1,6 +1,7 @@
 package com.nerojust.jetimagepicker.utils
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
@@ -24,6 +25,7 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 private const val MILLIS_PER_SECOND = 1000L
+private const val MILLIS_TO_MICROS = 1000L
 
 // Phone-camera video routinely records at 10-50+ Mbps; this is a fixed, deliberately
 // conservative target for meaningfully smaller output while staying watchable for casual
@@ -68,6 +70,41 @@ object VideoUtils {
             }
         }
 
+    /**
+     * Reads the duration of the video at [uri] in milliseconds, or `null` if it can't be read.
+     * Millisecond precision (unlike [getVideoDurationSeconds]'s whole-second truncation) is
+     * needed to size a trim range slider correctly. Runs on [Dispatchers.IO].
+     */
+    suspend fun getVideoDurationMillis(
+        context: Context,
+        uri: Uri,
+    ): Long? =
+        withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                retriever
+                    .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    ?.toLongOrNull()
+            } catch (e: Exception) {
+                Log.e("JetImagePicker", "Failed to read video duration", e)
+                null
+            } finally {
+                retriever.release()
+            }
+        }
+
+    /**
+     * True if `[startMs, endMs]` is a sane trim range within a video of [durationMs]: start
+     * non-negative, end after start by at least one second, and end not past the video's actual
+     * duration.
+     */
+    fun isValidTrimRange(
+        startMs: Long,
+        endMs: Long,
+        durationMs: Long,
+    ): Boolean = startMs >= 0 && endMs - startMs >= MILLIS_PER_SECOND && endMs <= durationMs
+
     /** True if [durationSeconds] is known and exceeds [limitSeconds]; false if either is null. */
     fun isDurationExceeded(
         durationSeconds: Long?,
@@ -92,19 +129,20 @@ object VideoUtils {
     }
 
     /**
-     * True when the raw [source] video is the library's own camera capture and has been superseded
-     * by a different [output] (or by no output at all, `null`), making it safe to delete. Never
-     * true for a gallery pick — that uri belongs to the caller — and never true when [output] IS
-     * [source], since that is the uri handed back to the caller.
+     * True when the raw [source] video is a file this library itself wrote (a camera capture, or
+     * a trim/compression output superseding an earlier one) and has been superseded by a
+     * different [output] (or by no output at all, `null`), making it safe to delete. Never true
+     * for a gallery-picked uri the caller owns — and never true when [output] IS [source], since
+     * that is the uri handed back to the caller.
      *
      * Generic so it stays a pure, unit-testable function (`Uri` can't be constructed in a plain
-     * JVM unit test); both call sites pass `Uri`.
+     * JVM unit test); all call sites pass `Uri`.
      */
     fun <T> shouldDeleteSource(
-        isCameraCapture: Boolean,
+        isLibraryOwned: Boolean,
         source: T,
         output: T?,
-    ): Boolean = isCameraCapture && output != source
+    ): Boolean = isLibraryOwned && output != source
 
     /**
      * Extracts a representative frame from the video at [uri] and caches it as a JPEG.
@@ -122,6 +160,30 @@ object VideoUtils {
                 bitmap?.let { Utils.writeBitmapToCache(context, it, filenamePrefix = "THUMB_VIDEO") }
             } catch (e: Exception) {
                 Log.e("JetImagePicker", "Failed to extract video thumbnail", e)
+                null
+            } finally {
+                retriever.release()
+            }
+        }
+
+    /**
+     * Extracts a single in-memory frame from the video at [uri] at [timeMs], for a live scrubbing
+     * preview. Unlike [extractVideoThumbnail], this does NOT write to a cache file — it's called
+     * repeatedly while the user drags a trim handle, so writing a file on every call would spam
+     * the filesystem. Runs on [Dispatchers.IO].
+     */
+    suspend fun extractFramePreview(
+        context: Context,
+        uri: Uri,
+        timeMs: Long,
+    ): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                retriever.getFrameAtTime(timeMs * MILLIS_TO_MICROS, MediaMetadataRetriever.OPTION_CLOSEST)
+            } catch (e: Exception) {
+                Log.e("JetImagePicker", "Failed to extract frame preview", e)
                 null
             } finally {
                 retriever.release()
@@ -199,6 +261,78 @@ object VideoUtils {
                     }.exceptionOrNull()
                 if (startFailure != null) {
                     Log.e("JetImagePicker", "Failed to start video compression", startFailure)
+                    if (continuation.isActive) continuation.resume(null)
+                    return@suspendCancellableCoroutine
+                }
+                continuation.invokeOnCancellation { transformer.cancel() }
+            }
+        }
+
+    /**
+     * Cuts the video at [uri] down to `[startMs, endMs]` via Media3 Transformer, writing the
+     * result to a cache file exposed via [FileProvider]. No codec is forced (unlike
+     * [compressVideo]) — Transformer takes a fast, lossless remux path for a plain clip whenever
+     * possible, only re-encoding if the container/codec genuinely requires it. Suspends until the
+     * export completes or fails; returns `null` on failure (caller falls back to the untrimmed
+     * uri, mirroring how a [compressVideo] failure is already handled).
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    suspend fun trimVideo(
+        context: Context,
+        uri: Uri,
+        startMs: Long,
+        endMs: Long,
+    ): Uri? =
+        withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { continuation ->
+                val outputFile =
+                    File(context.cacheDir, "TRIM_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4")
+                val clippedMediaItem =
+                    MediaItem.Builder()
+                        .setUri(uri)
+                        .setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder()
+                                .setStartPositionMs(startMs)
+                                .setEndPositionMs(endMs)
+                                .build(),
+                        )
+                        .build()
+                val transformer =
+                    Transformer.Builder(context)
+                        .addListener(
+                            object : Transformer.Listener {
+                                override fun onCompleted(
+                                    composition: Composition,
+                                    exportResult: ExportResult,
+                                ) {
+                                    val resultUri =
+                                        FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.provider",
+                                            outputFile,
+                                        )
+                                    if (continuation.isActive) continuation.resume(resultUri)
+                                }
+
+                                override fun onError(
+                                    composition: Composition,
+                                    exportResult: ExportResult,
+                                    exportException: ExportException,
+                                ) {
+                                    Log.e("JetImagePicker", "Video trim failed", exportException)
+                                    outputFile.delete()
+                                    if (continuation.isActive) continuation.resume(null)
+                                }
+                            },
+                        )
+                        .build()
+                val startFailure =
+                    runCatching {
+                        transformer.start(clippedMediaItem, outputFile.absolutePath)
+                    }.exceptionOrNull()
+                if (startFailure != null) {
+                    Log.e("JetImagePicker", "Failed to start video trim", startFailure)
+                    outputFile.delete()
                     if (continuation.isActive) continuation.resume(null)
                     return@suspendCancellableCoroutine
                 }

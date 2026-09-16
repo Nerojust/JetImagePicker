@@ -237,6 +237,7 @@ val videoPickerState = rememberJetVideoPickerState(
         enableCompression = true,
         enableThumbnail = true,
         durationLimitSeconds = 60,
+        enableTrim = true,
     ),
 ) { result ->
     when (result) {
@@ -254,6 +255,12 @@ Camera capture now records in-app via CameraX instead of handing off to the syst
 this is what lets `durationLimitSeconds` be enforced exactly, rather than depending on the
 device's camera app to honor a request it's free to ignore. It requests both `CAMERA` and
 `RECORD_AUDIO` together.
+
+When `enableTrim` is true, a trim screen appears automatically after pick/capture (for both
+sources) — letting you cut the video down before the duration limit is even checked, so you can
+rescue a video that's over `durationLimitSeconds` by trimming it down yourself (most relevant for
+gallery picks, since in-app camera capture already auto-stops at the limit). Cancelling the trim
+screen cancels the whole pick/capture, the same way cancelling the crop step does.
 
 **Dependency footprint:** video support pulls in
 [Media3 Transformer](https://developer.android.com/media/media3/transformer) (ExoPlayer's
