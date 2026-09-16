@@ -149,7 +149,12 @@ fun VideoPickerScreen(modifier: Modifier = Modifier) {
         LabeledSwitch(
             label = if (enableTrim) "Trim on" else "Trim off",
             checked = enableTrim,
-            onCheckedChange = { enableTrim = it },
+            onCheckedChange = {
+                enableTrim = it
+                pickerState.clearSelection()
+                thumbnailUri = null
+                message = null
+            },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
