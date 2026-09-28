@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,8 +26,16 @@ class MainActivity : ComponentActivity() {
 
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 TabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { androidx.compose.material3.Text("Image") })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { androidx.compose.material3.Text("Video") })
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Image") },
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Video") },
+                    )
                 }
                 when (selectedTab) {
                     0 -> ImagePickerScreen(Modifier.fillMaxSize())
