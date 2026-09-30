@@ -317,5 +317,60 @@
       "count": 15,
       "uniques": 9
     }
+  },
+  {
+    "date": "2026-09-24",
+    "views": {
+      "count": 0,
+      "uniques": 0
+    },
+    "clones": {
+      "count": 10,
+      "uniques": 6
+    }
+  },
+  {
+    "date": "2026-09-25",
+    "views": {
+      "count": 1,
+      "uniques": 1
+    },
+    "clones": {
+      "count": 25,
+      "uniques": 11
+    }
+  },
+  {
+    "date": "2026-09-26",
+    "views": {
+      "count": 2,
+      "uniques": 1
+    },
+    "clones": {
+      "count": 5,
+      "uniques": 5
+    }
+  },
+  {
+    "date": "2026-09-27",
+    "views": {
+      "count": 49,
+      "uniques": 2
+    },
+    "clones": {
+      "count": 2,
+      "uniques": 2
+    }
+  },
+  {
+    "date": "2026-09-28",
+    "views": {
+      "count": 48,
+      "uniques": 2
+    },
+    "clones": {
+      "count": 7,
+      "uniques": 3
+    }
   }
 ]
