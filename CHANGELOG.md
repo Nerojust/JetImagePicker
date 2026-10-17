@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `JetVideoPickerConfig.enableTrim` — an optional trim screen shown automatically after
+  pick/capture, before the duration-limit check, letting a user cut a video down (including to
+  rescue one that's over the configured limit — most relevant for gallery picks, since in-app
+  camera capture already auto-stops at the limit). Cancelling the trim screen cancels the whole
+  pick/capture, mirroring the image picker's crop-cancel behavior.
+
+### Changed
+- Video camera capture now records in-app via CameraX instead of launching the system camera app,
+  so `JetVideoPickerConfig.durationLimitSeconds` is actually enforced (the previous
+  `MediaStore.EXTRA_DURATION_LIMIT` approach was only a request some camera apps ignored).
+  Capture now requests both `CAMERA` and `RECORD_AUDIO` permissions.
+
+### Removed
+- `VideoPickerResult.PermissionDenied`, `PermissionPermanentlyDenied`, and `ShowRationale` —
+  replaced by `VideoPickerResult.PermissionsRequired(denied, permanentlyDenied,
+  shouldShowRationaleFor)`, since camera capture now requests two permissions at once. This is a
+  breaking change to the video API surface; the video feature has not been part of a published
+  release yet.
+
+## [2.1.0] - <fill in on release>
+
+### Added
+- Video pick/capture via `rememberJetVideoPickerState` / `JetVideoPickerConfig` / `VideoPickerResult` — a
+  separate API from the image picker. Supports optional compression (Media3 Transformer), thumbnail
+  extraction, and an optional duration limit (enforced live during capture, and re-checked defensively
+  afterward for both capture and gallery pick).
+- New dependency: `androidx.media3:media3-transformer` (used for video compression). It ships as a
+  regular `implementation` dependency of the library, so it lands on every consumer's runtime
+  classpath — including apps that only use the image picker. Expect a meaningful dependency-tree
+  addition (ExoPlayer's decode/encode stack); R8/minification strips the unused code from release
+  builds that never touch the video API.
+
 ## [2.0.1] - 2026-09-13
 
 ### Changed

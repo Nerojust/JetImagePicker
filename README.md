@@ -222,6 +222,70 @@ result, nothing picked.
 
 ---
 
+## 🎥 Video
+
+> Video support is on `main` and not yet part of a published release — the install snippet above
+> pins the latest released version, which is image-only.
+
+Pick or capture video with `rememberJetVideoPickerState` — a separate API from the image picker,
+so you wire it up independently:
+
+```kotlin
+val videoPickerState = rememberJetVideoPickerState(
+    context = context,
+    config = JetVideoPickerConfig(
+        enableCompression = true,
+        enableThumbnail = true,
+        durationLimitSeconds = 60,
+        enableTrim = true,
+    ),
+) { result ->
+    when (result) {
+        is VideoPickerResult.Success -> { /* result.uri, result.thumbnailUri */ }
+        is VideoPickerResult.DurationExceeded -> { /* result.uri exceeded result.limitSeconds */ }
+        is VideoPickerResult.PermissionsRequired -> { /* result.denied, result.permanentlyDenied, result.shouldShowRationaleFor */ }
+    }
+}
+
+Button(onClick = videoPickerState.pickFromGallery) { Text("Pick Video") }
+Button(onClick = videoPickerState.captureWithCamera) { Text("Capture Video") }
+```
+
+Camera capture now records in-app via CameraX instead of handing off to the system camera app —
+this is what lets `durationLimitSeconds` be enforced exactly, rather than depending on the
+device's camera app to honor a request it's free to ignore. It requests both `CAMERA` and
+`RECORD_AUDIO` together.
+
+When `enableTrim` is true, a trim screen appears automatically after pick/capture (for both
+sources) — letting you cut the video down before the duration limit is even checked, so you can
+rescue a video that's over `durationLimitSeconds` by trimming it down yourself (most relevant for
+gallery picks, since in-app camera capture already auto-stops at the limit). Cancelling the trim
+screen cancels the whole pick/capture, the same way cancelling the crop step does.
+
+**Dependency footprint:** video support pulls in
+[Media3 Transformer](https://developer.android.com/media/media3/transformer) (ExoPlayer's
+decode/encode stack) for compression — a meaningful addition to the dependency tree even if you
+only ever use the image picker. It comes in as a regular `implementation` dependency of the
+library, so it's on your runtime classpath either way; R8/minification strips the unused code from
+release builds of image-only apps.
+
+**Permission footprint:** the library's manifest declares `CAMERA` and `RECORD_AUDIO`, and manifest
+merger folds both into *every* consuming app — including apps that only use the image picker. That
+surfaces as "Camera" and "Microphone" on your Play Store listing. Both are declared alongside
+`<uses-feature android:required="false" />` so no device is filtered out of installing your app. If
+you're certain your app never calls `captureWithCamera()` on the video API, you can strip either
+permission with a manifest merger override in your own `AndroidManifest.xml`:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+</manifest>
+```
+
+---
+
 ## 📦 Configuration Options
 
 ```kotlin
