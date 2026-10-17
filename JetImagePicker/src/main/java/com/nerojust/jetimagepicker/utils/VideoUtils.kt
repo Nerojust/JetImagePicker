@@ -8,8 +8,11 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
@@ -32,6 +35,11 @@ private const val MILLIS_TO_MICROS = 1000L
 // short-form video. Not user-configurable in v1 (see JetVideoPickerConfig.enableCompression's
 // KDoc) - revisit if a size/quality knob is ever added.
 private const val COMPRESSED_VIDEO_BITRATE = 2_000_000
+
+// Android 13+ raises a requested bitrate to a per-resolution quality floor (~4.7 Mbps at 1080p,
+// ~2.1 Mbps at 720p), so the bitrate alone can't shrink high-res video - capping the short side
+// at 720p is what actually brings the floor down.
+private const val COMPRESSED_VIDEO_MAX_SHORT_SIDE = 720
 
 /**
  * Internal video file/metadata helpers backing [rememberVideoPickerLauncher]. Not intended
@@ -210,6 +218,15 @@ internal object VideoUtils {
                     .getOrNull()
                     ?.takeIf { it > 0 }
             }
+        val shortSide = getVideoShortSide(context, uri)
+        // Only ever downscale - createForShortSide would upscale a smaller source too.
+        val effects =
+            if (shortSide != null && shortSide > COMPRESSED_VIDEO_MAX_SHORT_SIDE) {
+                Effects(emptyList(), listOf(Presentation.createForShortSide(COMPRESSED_VIDEO_MAX_SHORT_SIDE)))
+            } else {
+                Effects.EMPTY
+            }
+        val editedMediaItem = EditedMediaItem.Builder(MediaItem.fromUri(uri)).setEffects(effects).build()
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val outputFile =
@@ -275,7 +292,7 @@ internal object VideoUtils {
                 // the coroutine uncaught, so treat it like the async onError path.
                 val startFailure =
                     runCatching {
-                        transformer.start(MediaItem.fromUri(uri), outputFile.absolutePath)
+                        transformer.start(editedMediaItem, outputFile.absolutePath)
                     }.exceptionOrNull()
                 if (startFailure != null) {
                     Log.e("JetImagePicker", "Failed to start video compression", startFailure)
@@ -366,3 +383,27 @@ internal object VideoUtils {
             }
         }
 }
+
+// setDataSource throws a bare RuntimeException for unreadable media - same as the VideoUtils
+// readers (baselined there); top-level only to stay under VideoUtils' TooManyFunctions limit.
+
+/** The shorter of the video's width/height in pixels, or `null` if unreadable. Runs on [Dispatchers.IO]. */
+@Suppress("TooGenericExceptionCaught")
+internal suspend fun getVideoShortSide(
+    context: Context,
+    uri: Uri,
+): Int? =
+    withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+            if (width != null && height != null) minOf(width, height) else null
+        } catch (e: Exception) {
+            Log.e("JetImagePicker", "Failed to read video dimensions", e)
+            null
+        } finally {
+            retriever.release()
+        }
+    }

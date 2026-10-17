@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,6 +45,7 @@ class CompressVideoTest {
         val (before, after) = sizeOf(source) to sizeOf(output!!)
         Log.i("CompressVideoTest", "1080p/15Mbps: $before -> $after bytes")
         assertTrue("expected < 50% of $before, got $after", after < before / 2)
+        assertEquals(720, runBlocking { getVideoShortSide(context, output) })
     }
 
     @Test
