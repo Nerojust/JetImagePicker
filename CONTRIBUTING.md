@@ -23,6 +23,10 @@ Run the full local check suite — this is exactly what CI runs:
 - Formatting is enforced by [ktlint](https://github.com/pinterest/ktlint) — run `./gradlew ktlintFormat` to auto-fix.
 - Static analysis is enforced by [detekt](https://detekt.dev/). The baseline file is a one-time snapshot taken when detekt was introduced — it is not meant to grow, so don't add new entries to it; fix new findings in your own code instead.
 - New logic (a branch, a loop, a parser, anything touching permissions or file I/O) needs a covering unit test.
+- If you touch video compression, also run the instrumented tests on a device or emulator
+  (`./gradlew :JetImagePicker:connectedDebugAndroidTest`). They use sample clips that are
+  gitignored — generate them first with the `ffmpeg` commands at the top of
+  `CompressVideoTest.kt`.
 
 ## Commit / PR conventions
 
@@ -32,7 +36,7 @@ Run the full local check suite — this is exactly what CI runs:
 
 ## Reporting bugs
 
-Open a GitHub issue with: the `JetImagePickerConfig` you used, the Android version/device, and (if possible) a minimal repro in the `app` module.
+Open a GitHub issue with: the `JetImagePickerConfig` / `JetVideoPickerConfig` you used, the Android version/device, and (if possible) a minimal repro in the `app` module.
 
 ## License
 

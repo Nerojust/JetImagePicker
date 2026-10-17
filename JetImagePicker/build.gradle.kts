@@ -8,14 +8,14 @@ plugins {
 }
 
 group = "io.github.nerojust"
-version = "2.0.1"
+version = "2.1.0"
 
 android {
     namespace = "com.nerojust.jetimagepicker"
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -94,6 +94,12 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.easycrop)
+    implementation(libs.media3.transformer)
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.video)
+    implementation(libs.camera.view)
 }
 
 detekt {

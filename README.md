@@ -4,7 +4,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.nerojust/jetimagepicker.svg)](https://central.sonatype.com/artifact/io.github.nerojust/jetimagepicker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A modern, Jetpack Compose-ready image picker for Android — because hand-rolling
+A modern, Jetpack Compose-ready image **and video** picker for Android — because hand-rolling
 `ActivityResultContracts` and permission flows for the fifth project in a row
 should not be anyone's personality trait.
 
@@ -13,16 +13,20 @@ should not be anyone's personality trait.
 ## Features
 
 1. Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
-2. Supports Camera and Gallery.
+2. Supports Camera and Gallery — for images and videos.
 3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
 4. Supports multiple image selection and compression
 5. Optional crop step (free, square, or custom aspect ratio) shown automatically — no extra UI code
-6. Provides structured result callbacks for success and error handling
-7. Just works – no hidden setup, no `ActivityResultContracts`, and no more permission nightmares!
+6. Video: in-app recorder with flash and front/back camera switch, live duration limit, optional trim, compression and thumbnail
+7. Provides structured result callbacks for success and error handling
+8. Just works – no hidden setup, no `ActivityResultContracts`, and no more permission nightmares!
 
 ---
 
 ## 🛠️ Setup
+
+**Requirements:** `minSdk` 23+ (since 2.1.0 — CameraX and Media3 require it; 2.0.x supports
+`minSdk` 21 but has no video support).
 
 One step, straight from Maven Central. Make sure `mavenCentral()` is in your `settings.gradle.kts`:
 
@@ -39,7 +43,7 @@ Then add the dependency (see the badge above for the latest version):
 
 ```kotlin
 dependencies {
-    implementation("io.github.nerojust:jetimagepicker:2.0.1")
+    implementation("io.github.nerojust:jetimagepicker:2.1.0")
 }
 ```
 
@@ -57,10 +61,12 @@ A little manifest housekeeping, then you're done. Promise.
 
 ### 1. Configure your `AndroidManifest.xml`
 
-Gallery picking uses Android's Photo Picker and needs **no storage permission**. Only camera capture needs a runtime permission:
+Gallery picking uses Android's Photo Picker and needs **no storage permission**. Only camera
+capture needs runtime permissions — `CAMERA`, plus `RECORD_AUDIO` for video. The library's
+manifest already declares both (they merge into your app automatically), so all you add is the
+`FileProvider`:
 
 ```xml
-<uses-permission android:name="android.permission.CAMERA" />
 
 <application>
     <provider
@@ -192,9 +198,124 @@ fun ImagePickerScreen() {
 }
 ```
 
-> 💡 The `app` module in this repo is a fuller interactive demo — toggle single vs. multiple
-> selection, compression, and crop-to-square on/off live, and see each image's file size update
-> accordingly.
+### ✅ Video Picker Screen
+
+<p>
+  <img width="300" alt="JetImagePicker in-app video recorder with Flash and Switch camera buttons" src="docs/images/recorder_screenshot.png" />
+  &nbsp;
+  <img width="300" alt="JetVideoPicker demo showing a recorded video's thumbnail and size" src="docs/images/video_screenshot.png" />
+</p>
+
+Same idea for video — the in-app recorder (with flash and a front/back camera switch), trim
+screen, compression and thumbnail all come for free:
+
+```kotlin
+import android.net.Uri
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.nerojust.jetimagepicker.config.JetVideoPickerConfig
+import com.nerojust.jetimagepicker.result.VideoPickerResult
+import com.nerojust.jetimagepicker.state.rememberJetVideoPickerState
+import com.nerojust.jetimagepicker.ui.ImagePreview
+
+@Composable
+fun VideoPickerScreen() {
+    val context = LocalContext.current
+    var thumbnailUri by remember { mutableStateOf<Uri?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    val videoPickerState = rememberJetVideoPickerState(
+        context = context,
+        config = JetVideoPickerConfig(
+            enableCompression = true,
+            enableThumbnail = true,
+            durationLimitSeconds = 60,
+            enableTrim = true
+        )
+    ) { result ->
+        when (result) {
+            is VideoPickerResult.Success -> {
+                // uri == null means the user cancelled
+                thumbnailUri = result.thumbnailUri
+                message = null
+            }
+            is VideoPickerResult.DurationExceeded -> {
+                message = "Please pick a video under ${result.limitSeconds}s."
+            }
+            is VideoPickerResult.PermissionsRequired -> {
+                message = when {
+                    result.permanentlyDenied.isNotEmpty() ->
+                        "Enable ${result.permanentlyDenied.joinToString()} in Settings to record."
+                    else -> "Camera and microphone access are needed to record video."
+                }
+            }
+        }
+    }
+
+    Column(Modifier.padding(16.dp)) {
+        Button(onClick = videoPickerState.pickFromGallery, enabled = !videoPickerState.isLoading) {
+            Text("Pick Video from Gallery")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Opens the in-app recorder (flash + front/back camera switch built in)
+        Button(onClick = videoPickerState.captureWithCamera, enabled = !videoPickerState.isLoading) {
+            Text("Capture Video with Camera")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = {
+                videoPickerState.clearSelection()
+                thumbnailUri = null
+            },
+            enabled = videoPickerState.selectedVideoUri != null
+        ) {
+            Text("Clear Selection")
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        if (videoPickerState.isLoading) {
+            CircularProgressIndicator()
+        }
+
+        videoPickerState.selectedVideoUri?.let { videoUri ->
+            thumbnailUri?.let { ImagePreview(uri = it, contentDescription = "Video thumbnail") }
+            Text("Video: $videoUri", style = MaterialTheme.typography.bodySmall)
+        }
+
+        message?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+```
+
+> 💡 The `app` module in this repo is a fuller interactive demo with Image and Video tabs —
+> toggle selection mode, compression, crop, thumbnail, duration limit and trim live, and see each
+> result's file size update accordingly.
 
 ---
 
@@ -222,6 +343,80 @@ result, nothing picked.
 
 ---
 
+## 🎥 Video
+
+Pick or capture video with `rememberJetVideoPickerState` — a separate API from the image picker,
+so you wire it up independently:
+
+```kotlin
+val videoPickerState = rememberJetVideoPickerState(
+    context = context,
+    config = JetVideoPickerConfig(
+        enableCompression = true,
+        enableThumbnail = true,
+        durationLimitSeconds = 60,
+        enableTrim = true,
+    ),
+) { result ->
+    when (result) {
+        is VideoPickerResult.Success -> { /* result.uri, result.thumbnailUri */ }
+        is VideoPickerResult.DurationExceeded -> { /* result.uri exceeded result.limitSeconds */ }
+        is VideoPickerResult.PermissionsRequired -> { /* result.denied, result.permanentlyDenied, result.shouldShowRationaleFor */ }
+    }
+}
+
+Button(onClick = videoPickerState.pickFromGallery) { Text("Pick Video") }
+Button(onClick = videoPickerState.captureWithCamera) { Text("Capture Video") }
+```
+
+Camera capture now records in-app via CameraX instead of handing off to the system camera app —
+this is what lets `durationLimitSeconds` be enforced exactly, rather than depending on the
+device's camera app to honor a request it's free to ignore. It requests both `CAMERA` and
+`RECORD_AUDIO` together. The recorder has:
+
+- a **flash** (torch) toggle — shown when the current camera has a flash, usable before and during
+  recording, and switched off automatically when recording stops;
+- a **front/back camera switch** — available before recording starts (hidden on single-camera
+  devices). Front-camera video is saved mirrored, matching the preview.
+
+The screen stays locked to its orientation while recording, and a recording cut short by the app
+going to the background (e.g. an incoming call) is kept rather than discarded.
+
+**Compression** (`enableCompression = true`) re-encodes to H.264 at ~2 Mbps and scales anything
+larger than 720p down to a 720p short side (never upscaling). If re-encoding wouldn't actually make
+the file smaller — e.g. a clip that's already 720p at a low bitrate — you get the original back
+untouched instead of a bigger "compressed" copy.
+
+When `enableTrim` is true, a trim screen appears automatically after pick/capture (for both
+sources) — letting you cut the video down before the duration limit is even checked, so you can
+rescue a video that's over `durationLimitSeconds` by trimming it down yourself (most relevant for
+gallery picks, since in-app camera capture already auto-stops at the limit). Cancelling the trim
+screen cancels the whole pick/capture, the same way cancelling the crop step does.
+
+**Dependency footprint:** video support pulls in
+[Media3 Transformer](https://developer.android.com/media/media3/transformer) (ExoPlayer's
+decode/encode stack) for compression — a meaningful addition to the dependency tree even if you
+only ever use the image picker. It comes in as a regular `implementation` dependency of the
+library, so it's on your runtime classpath either way; R8/minification strips the unused code from
+release builds of image-only apps.
+
+**Permission footprint:** the library's manifest declares `CAMERA` and `RECORD_AUDIO`, and manifest
+merger folds both into *every* consuming app — including apps that only use the image picker. That
+surfaces as "Camera" and "Microphone" on your Play Store listing. Both are declared alongside
+`<uses-feature android:required="false" />` so no device is filtered out of installing your app. If
+you're certain your app never calls `captureWithCamera()` on the video API, you can strip either
+permission with a manifest merger override in your own `AndroidManifest.xml`:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+</manifest>
+```
+
+---
+
 ## 📦 Configuration Options
 
 ```kotlin
@@ -233,6 +428,13 @@ JetImagePickerConfig(
     targetHeight = 1024,
     enableCrop = false,
     cropAspectRatio = CropAspectRatio.Free
+)
+
+JetVideoPickerConfig(
+    enableCompression = true,   // re-encode: ~2 Mbps H.264, max 720p short side
+    enableThumbnail = true,     // extract a thumbnail frame into Success.thumbnailUri
+    durationLimitSeconds = null, // e.g. 60 — enforced live during capture, re-checked after
+    enableTrim = false,         // show the trim screen after pick/capture
 )
 ```
 
@@ -251,6 +453,24 @@ sealed class ImagePickerResult {
 }
 ```
 
+Video uses `VideoPickerResult`. Camera capture needs two permissions at once, so their states
+come back together in one `PermissionsRequired`:
+
+```kotlin
+sealed class VideoPickerResult {
+    data class Success(val uri: Uri?, val thumbnailUri: Uri?) : VideoPickerResult() // uri == null: cancelled
+    data class DurationExceeded(val uri: Uri, val limitSeconds: Int) : VideoPickerResult()
+    data class PermissionsRequired(
+        val denied: List<String>,
+        val permanentlyDenied: List<String>,
+        val shouldShowRationaleFor: List<String>,
+    ) : VideoPickerResult()
+}
+```
+
+> For a camera capture, `DurationExceeded.uri` is deleted right after the callback returns —
+> read anything you need from it inside the callback.
+
 ---
 
 ## 📋 `JetImagePickerState` Reference
@@ -263,6 +483,16 @@ sealed class ImagePickerResult {
 | `pickFromGallery` | Launches the gallery picker (Photo Picker on supported devices). |
 | `captureWithCamera` | Launches the system camera to capture a new photo. |
 | `clearSelection` | Resets `selectedImageUris`/`selectedImageUri` back to empty. |
+
+## 📋 `JetVideoPickerState` Reference
+
+| Member | Description |
+|---|---|
+| `selectedVideoUri` | The picked/captured (and possibly trimmed/compressed) video, or `null`. |
+| `isLoading` | `true` while the video is being compressed or trimmed. |
+| `pickFromGallery` | Launches the Photo Picker for a video. |
+| `captureWithCamera` | Requests `CAMERA` + `RECORD_AUDIO` if needed, then opens the in-app recorder. |
+| `clearSelection` | Resets `selectedVideoUri` back to `null`. |
 
 ---
 

@@ -2,3 +2,10 @@ naming:
   FunctionNaming:
     active: true
     ignoreAnnotated: ['Composable']
+
+complexity:
+  TooManyFunctions:
+    active: true
+    # VideoUtils is a single cohesive object of small, pure, unit-tested video helpers; splitting
+    # it into multiple objects for its own sake would be pure ceremony (YAGNI).
+    thresholdInObjects: 12

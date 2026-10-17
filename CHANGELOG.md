@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-10-17
+
+### Added
+- Video pick/capture via `rememberJetVideoPickerState` / `JetVideoPickerConfig` / `VideoPickerResult` — a
+  separate API from the image picker. Gallery picking uses the Photo Picker (no permission needed);
+  camera capture records in-app via CameraX and requests `CAMERA` + `RECORD_AUDIO`, reported together
+  through `VideoPickerResult.PermissionsRequired`. Supports optional compression (Media3 Transformer),
+  thumbnail extraction, and an optional duration limit (enforced live during capture, and re-checked
+  defensively afterward for both capture and gallery pick).
+- In-app recorder controls: a flash (torch) toggle, shown only when the current camera has a flash
+  unit and switched off when recording stops, and a front/back camera switch (before recording
+  starts; hidden on single-camera devices). Front-camera video is saved mirrored to match the
+  preview. The screen locks to its orientation while recording, and a recording cut short by the app
+  going to the background is kept.
+- `JetVideoPickerConfig.enableTrim` — an optional trim screen shown automatically after
+  pick/capture, before the duration-limit check, letting a user cut a video down (including to
+  rescue one that's over the configured limit — most relevant for gallery picks, since in-app
+  camera capture already auto-stops at the limit). Cancelling the trim screen cancels the whole
+  pick/capture, mirroring the image picker's crop-cancel behavior.
+- Video compression re-encodes to H.264 at ~2 Mbps and downscales to a 720p short side (never
+  upscales). If the result wouldn't be smaller than the source — Android 13+ enforces a
+  per-resolution minimum bitrate, so already-small clips can't shrink — the original is returned
+  instead of a larger "compressed" copy.
+- New dependencies: `androidx.media3:media3-transformer` (compression/trim) and CameraX
+  (`camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-video`, `camera-view`; in-app
+  recording). Both ship as regular `implementation` dependencies of the library, so they land on every
+  consumer's runtime classpath — including apps that only use the image picker. Expect a meaningful
+  dependency-tree addition; R8/minification strips the unused code from release builds that never
+  touch the video API.
+- The library manifest now declares `RECORD_AUDIO`, plus `camera`, `camera.autofocus` and
+  `microphone` as `required="false"` features, all of which merge into consuming apps (the features
+  are optional so Play Store filtering doesn't exclude devices without a camera or mic).
+
+### Changed
+- **Breaking:** `minSdk` raised from 21 to 23, required by CameraX and Media3. Apps with a lower
+  `minSdk` must raise theirs to upgrade (or stay on 2.0.x).
+
 ## [2.0.1] - 2026-09-13
 
 ### Changed

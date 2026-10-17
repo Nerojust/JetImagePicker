@@ -104,18 +104,21 @@ object Utils {
 
     /**
      * Writes [bitmap] to a new cache file as JPEG and returns its [FileProvider] URI.
-     * Used to turn an in-memory cropped bitmap back into a [Uri] the rest of the pipeline expects.
+     * [filenamePrefix] distinguishes callers writing different kinds of images to cache
+     * (e.g. cropped images vs. video thumbnails).
      */
     fun writeBitmapToCache(
         context: Context,
         bitmap: Bitmap,
+        filenamePrefix: String = "CROP",
     ): Uri? =
         try {
-            val file = File(context.cacheDir, "CROP_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+            val filename = "${filenamePrefix}_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg"
+            val file = File(context.cacheDir, filename)
             FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, MAX_QUALITY, it) }
             FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         } catch (e: Exception) {
-            Log.e("JetImagePicker", "Failed to write cropped bitmap to cache", e)
+            Log.e("JetImagePicker", "Failed to write bitmap to cache", e)
             null
         }
 }
