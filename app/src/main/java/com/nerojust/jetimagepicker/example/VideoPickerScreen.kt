@@ -299,7 +299,9 @@ private fun VideoPickerResultSection(
                 val bytes = context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
                 formatFileSize(bytes)
             }
-        val sizeCaption = if (enableCompression) "compressed" else "original"
+        // Describes the setting, not the outcome: with compression on, a clip that re-encoding
+        // couldn't shrink comes back as the untouched original.
+        val sizeCaption = if (enableCompression) "compression on" else "compression off"
         Text(
             text = "Size: $videoSize ($sizeCaption)",
             style = MaterialTheme.typography.bodySmall,
