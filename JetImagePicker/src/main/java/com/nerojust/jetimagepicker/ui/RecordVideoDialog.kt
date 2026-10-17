@@ -1,9 +1,13 @@
 package com.nerojust.jetimagepicker.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
@@ -18,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +32,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +56,9 @@ import java.io.File
 
 private const val NANOS_PER_SECOND = 1_000_000_000L
 
+// Same as the launchers (baselined): one composable owning the camera/recording lifecycle reads
+// more clearly than splitting its tightly-coupled state across helpers.
+
 /**
  * Full-screen in-app video recording dialog, shown automatically by
  * [com.nerojust.jetimagepicker.launchers.rememberVideoPickerLauncher] when
@@ -60,6 +69,7 @@ private const val NANOS_PER_SECOND = 1_000_000_000L
  * the app going to the background), or `null` if the user cancelled, the camera failed to bind, or
  * recording finalized with any other error (all treated the same way).
  */
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun RecordVideoDialog(
     durationLimitSeconds: Int?,
@@ -74,9 +84,15 @@ internal fun RecordVideoDialog(
             Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
         }
     val recorder = remember { Recorder.Builder().build() }
-    val videoCapture = remember { VideoCapture.withOutput(recorder) }
+    // Save front-camera video mirrored, matching the (always mirrored) front preview the user saw.
+    val videoCapture =
+        remember { VideoCapture.Builder(recorder).setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY).build() }
 
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
+    var canFlip by remember { mutableStateOf(false) }
+    var isTorchOn by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf<Recording?>(null) }
     var isRecording by remember { mutableStateOf(false) }
     var isCancelled by remember { mutableStateOf(false) }
@@ -91,14 +107,20 @@ internal fun RecordVideoDialog(
         }
     }
 
-    LaunchedEffect(Unit) {
+    // Re-runs on every flip: rebinding to the other lens gives a new Camera with its torch off.
+    LaunchedEffect(lensFacing) {
         runCatching {
             val provider = ProcessCameraProvider.awaitInstance(context)
             cameraProvider = provider
+            canFlip =
+                provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) &&
+                provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
             // Only unbind this dialog's own use cases - unbindAll() would silently kill any
             // CameraX use cases the consuming app has bound elsewhere and never rebind them.
             provider.unbind(preview, videoCapture)
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
+            isTorchOn = false
+            val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+            camera = provider.bindToLifecycle(lifecycleOwner, selector, preview, videoCapture)
         }.onFailure { e ->
             // Must not treat coroutine cancellation (e.g. the dialog leaving composition after
             // the user tapped Cancel while awaitInstance was still suspended) as a camera
@@ -136,6 +158,14 @@ internal fun RecordVideoDialog(
     }
 
     fun startRecording() {
+        // Checked upstream before the dialog opens, but the dialog survives process death
+        // (rememberSaveable) and the user may have revoked the mic in Settings meanwhile.
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            onFinished(null)
+            return
+        }
         isCancelled = false
         elapsedSeconds = 0L
         val file = VideoUtils.createVideoFile(context)
@@ -154,6 +184,9 @@ internal fun RecordVideoDialog(
                         recording?.stop()
                     }
                     if (event is VideoRecordEvent.Finalize) {
+                        // Don't leave the light burning once there's nothing left to record.
+                        camera?.cameraControl?.enableTorch(false)
+                        isTorchOn = false
                         isRecording = false
                         recording = null
                         handleFinalize(event, file, isCancelled, onFinished)
@@ -180,12 +213,22 @@ internal fun RecordVideoDialog(
 
             AppNameLabel()
 
-            RecordControls(
-                isRecording = isRecording,
-                elapsedSeconds = elapsedSeconds,
-                onCancel = { stopAndDiscard() },
-                onToggleRecording = { if (isRecording) recording?.stop() else startRecording() },
-            )
+            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                CameraToggles(
+                    camera = camera,
+                    isTorchOn = isTorchOn,
+                    onTorchChanged = { isTorchOn = it },
+                    onFlip = { lensFacing = oppositeLens(lensFacing) }.takeIf { canFlip },
+                    // Switching lens mid-recording would need a persistent recording; out of scope.
+                    flipEnabled = !isRecording,
+                )
+                RecordControls(
+                    isRecording = isRecording,
+                    elapsedSeconds = elapsedSeconds,
+                    onCancel = { stopAndDiscard() },
+                    onToggleRecording = { if (isRecording) recording?.stop() else startRecording() },
+                )
+            }
         }
     }
 }
@@ -230,8 +273,51 @@ private fun BoxScope.AppNameLabel() {
     )
 }
 
+private fun oppositeLens(lensFacing: Int): Int =
+    if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+        CameraSelector.LENS_FACING_FRONT
+    } else {
+        CameraSelector.LENS_FACING_BACK
+    }
+
+/**
+ * Flash and camera-switch buttons. Flash is omitted when [camera]'s lens has no flash unit (most
+ * front cameras); switching is omitted when [onFlip] is `null` (device lacks a front or back camera).
+ */
 @Composable
-private fun BoxScope.RecordControls(
+private fun CameraToggles(
+    camera: Camera?,
+    isTorchOn: Boolean,
+    onTorchChanged: (Boolean) -> Unit,
+    onFlip: (() -> Unit)?,
+    flipEnabled: Boolean,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        if (camera?.cameraInfo?.hasFlashUnit() == true) {
+            TextButton(onClick = {
+                camera.cameraControl.enableTorch(!isTorchOn)
+                onTorchChanged(!isTorchOn)
+            }) {
+                Text(if (isTorchOn) "Flash: on" else "Flash: off", color = Color.White)
+            }
+        }
+        if (onFlip != null) {
+            TextButton(onClick = onFlip, enabled = flipEnabled) {
+                Text("Switch camera", color = if (flipEnabled) Color.White else Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordControls(
     isRecording: Boolean,
     elapsedSeconds: Long,
     onCancel: () -> Unit,
@@ -241,7 +327,6 @@ private fun BoxScope.RecordControls(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
                 .background(Color.Black.copy(alpha = 0.5f))
                 .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
