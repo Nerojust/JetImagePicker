@@ -1,5 +1,7 @@
 package com.nerojust.jetimagepicker.ui
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -54,8 +56,9 @@ private const val NANOS_PER_SECOND = 1_000_000_000L
  * `captureWithCamera()` is called. Records via CameraX so [durationLimitSeconds] is enforced
  * live, rather than depending on the system camera app to honor a request it can ignore.
  *
- * @param onFinished Called with the recorded [File] on success, or `null` if the user cancelled,
- * the camera failed to bind, or recording finalized with an error (all treated the same way).
+ * @param onFinished Called with the recorded [File] on success (including a recording cut short by
+ * the app going to the background), or `null` if the user cancelled, the camera failed to bind, or
+ * recording finalized with any other error (all treated the same way).
  */
 @Composable
 internal fun RecordVideoDialog(
@@ -113,13 +116,23 @@ internal fun RecordVideoDialog(
 
     DisposableEffect(Unit) {
         onDispose {
-            // ponytail: does not await Finalize if the composable is torn down mid-recording
-            // for a reason other than the Cancel button (e.g. the whole picker leaving
-            // composition) - the async Finalize callback below may still fire onFinished after
-            // disposal in that edge case. Acceptable for v1; revisit if it causes issues.
+            // Torn down mid-recording without the Cancel button (e.g. Activity recreated by a
+            // config change the orientation lock below doesn't cover): the async Finalize can no
+            // longer deliver to anyone, so mark it cancelled to have handleFinalize delete the file.
+            if (recording != null) isCancelled = true
             recording?.stop()
             cameraProvider?.unbind(preview, videoCapture)
         }
+    }
+
+    // Lock to the orientation recording started in, like a stock camera app: rotating would
+    // recreate the Activity and tear down the in-progress recording.
+    DisposableEffect(isRecording) {
+        val activity = context as? Activity
+        if (!isRecording || activity == null) return@DisposableEffect onDispose {}
+        val previousOrientation = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        onDispose { activity.requestedOrientation = previousOrientation }
     }
 
     fun startRecording() {
@@ -187,10 +200,13 @@ private fun handleFinalize(
     isCancelled: Boolean,
     onFinished: (File?) -> Unit,
 ) {
-    if (event.hasError()) {
+    // ERROR_SOURCE_INACTIVE (app backgrounded, e.g. an incoming call) still finalizes a valid,
+    // playable file - keep it rather than throwing the user's clip away.
+    val failed = event.hasError() && event.error != VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE
+    if (failed) {
         Log.e("JetImagePicker", "Video recording failed: ${event.error}")
     }
-    if (isCancelled || event.hasError()) {
+    if (isCancelled || failed) {
         file.delete()
         onFinished(null)
     } else {

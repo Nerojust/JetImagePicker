@@ -16,3 +16,6 @@ local.properties
 /.claude
 /docs/notes
 /docs/superpowers
+
+# Generated sample videos for CompressVideoTest (regenerate with ffmpeg, see the test file)
+JetImagePicker/src/androidTest/assets/*.mp4

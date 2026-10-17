@@ -37,7 +37,7 @@ private const val COMPRESSED_VIDEO_BITRATE = 2_000_000
  * Internal video file/metadata helpers backing [rememberVideoPickerLauncher]. Not intended
  * for direct use by consumers.
  */
-object VideoUtils {
+internal object VideoUtils {
     /** Creates a new empty cache file for a CameraX video recording. */
     fun createVideoFile(context: Context): File =
         File(
@@ -192,7 +192,8 @@ object VideoUtils {
 
     /**
      * Re-encodes the video at [uri] via Media3 Transformer, writing the result to a cache file
-     * exposed via [FileProvider]. Suspends until the export completes or fails.
+     * exposed via [FileProvider]. Suspends until the export completes or fails; returns `null` on
+     * failure or when the result wouldn't be smaller than the source (caller keeps the original).
      *
      * Every Transformer symbol used below is `@UnstableApi`: opting in is a real commitment, since
      * Media3 can change these signatures in a minor version bump - the version is pinned, and this
@@ -202,8 +203,14 @@ object VideoUtils {
     suspend fun compressVideo(
         context: Context,
         uri: Uri,
-    ): Uri? =
-        withContext(Dispatchers.Main) {
+    ): Uri? {
+        val sourceSize =
+            withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } }
+                    .getOrNull()
+                    ?.takeIf { it > 0 }
+            }
+        return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val outputFile =
                     File(context.cacheDir, "COMP_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4")
@@ -233,6 +240,16 @@ object VideoUtils {
                                     composition: Composition,
                                     exportResult: ExportResult,
                                 ) {
+                                    // Android 13+ raises a too-low requested bitrate to a
+                                    // per-resolution quality floor ("VQApply"), so an already
+                                    // small source can come out the same size or larger. Never
+                                    // hand back a "compressed" file that isn't smaller.
+                                    if (sourceSize != null && outputFile.length() >= sourceSize) {
+                                        Log.d("JetImagePicker", "Compression wouldn't shrink video; kept original")
+                                        outputFile.delete()
+                                        if (continuation.isActive) continuation.resume(null)
+                                        return
+                                    }
                                     val resultUri =
                                         FileProvider.getUriForFile(
                                             context,
@@ -248,6 +265,7 @@ object VideoUtils {
                                     exportException: ExportException,
                                 ) {
                                     Log.e("JetImagePicker", "Video compression failed", exportException)
+                                    outputFile.delete()
                                     if (continuation.isActive) continuation.resume(null)
                                 }
                             },
@@ -261,12 +279,17 @@ object VideoUtils {
                     }.exceptionOrNull()
                 if (startFailure != null) {
                     Log.e("JetImagePicker", "Failed to start video compression", startFailure)
+                    outputFile.delete()
                     if (continuation.isActive) continuation.resume(null)
                     return@suspendCancellableCoroutine
                 }
-                continuation.invokeOnCancellation { transformer.cancel() }
+                continuation.invokeOnCancellation {
+                    transformer.cancel()
+                    outputFile.delete()
+                }
             }
         }
+    }
 
     /**
      * Cuts the video at [uri] down to `[startMs, endMs]` via Media3 Transformer, writing the
@@ -336,7 +359,10 @@ object VideoUtils {
                     if (continuation.isActive) continuation.resume(null)
                     return@suspendCancellableCoroutine
                 }
-                continuation.invokeOnCancellation { transformer.cancel() }
+                continuation.invokeOnCancellation {
+                    transformer.cancel()
+                    outputFile.delete()
+                }
             }
         }
 }

@@ -6,7 +6,7 @@ import com.nerojust.jetimagepicker.model.PermissionState
  * Buckets the independent [cameraState] and [audioState] permission states into one
  * [VideoPickerResult.PermissionsRequired], or `null` if both are granted (nothing to report).
  */
-fun toPermissionsRequiredOrNull(
+internal fun toPermissionsRequiredOrNull(
     cameraState: PermissionState,
     audioState: PermissionState,
 ): VideoPickerResult.PermissionsRequired? {

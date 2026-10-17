@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.github.nerojust"
-version = "2.0.1"
+version = "2.1.0"
 
 android {
     namespace = "com.nerojust.jetimagepicker"

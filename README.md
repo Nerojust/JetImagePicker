@@ -39,7 +39,7 @@ Then add the dependency (see the badge above for the latest version):
 
 ```kotlin
 dependencies {
-    implementation("io.github.nerojust:jetimagepicker:2.0.1")
+    implementation("io.github.nerojust:jetimagepicker:2.1.0")
 }
 ```
 

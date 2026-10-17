@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Test APK only: CameraX and Media3 require minSdk 23 while the library still declares 21. -->
+    <uses-sdk tools:overrideLibrary="androidx.camera.camera2.pipe,androidx.camera.video,androidx.camera.lifecycle,androidx.camera.camera2,androidx.camera.core,androidx.camera.view,androidx.camera.viewfinder.core,androidx.media3.exoplayer,androidx.media3.effect,androidx.media3.datasource,androidx.media3.muxer,androidx.media3.extractor,androidx.media3.container,androidx.media3.database,androidx.media3.decoder,androidx.media3.common,androidx.media3.transformer,androidx.core.backported.fixes,androidx.camera.featurecombinationquery" />
+    <!-- compressVideo resolves "${packageName}.provider"; consuming apps declare it, so the test APK must too. -->
+    <application>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/test_file_paths" />
+        </provider>
+    </application>
+</manifest>

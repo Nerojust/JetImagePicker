@@ -22,6 +22,7 @@ import com.nerojust.jetimagepicker.result.toPermissionsRequiredOrNull
 import com.nerojust.jetimagepicker.ui.RecordVideoDialog
 import com.nerojust.jetimagepicker.ui.TrimVideoDialog
 import com.nerojust.jetimagepicker.utils.VideoUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -49,7 +50,7 @@ fun rememberVideoPickerLauncher(
 
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
     var hasAudioPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
-    var showRecordDialog by remember { mutableStateOf(false) }
+    var showRecordDialog by rememberSaveable { mutableStateOf(false) }
     var pendingTrimUri by rememberSaveable(stateSaver = NullableUriSaver) { mutableStateOf(null) }
     var pendingTrimIsLibraryOwned by rememberSaveable { mutableStateOf(false) }
     var previousOutputUri by remember { mutableStateOf<Uri?>(null) }
@@ -68,6 +69,7 @@ fun rememberVideoPickerLauncher(
             return
         }
         isProcessing = true
+        var output: Uri? = null
         try {
             val durationSeconds = VideoUtils.getVideoDurationSeconds(context, uri)
             val limitSeconds = config.durationLimitSeconds
@@ -84,7 +86,7 @@ fun rememberVideoPickerLauncher(
 
             onLoadingChanged(true)
             try {
-                val output = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
+                output = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
 
                 // A compressed output is ours (written to cacheDir via FileProvider) - safe to
                 // delete once superseded. Never delete the caller's original picked/captured uri.
@@ -106,6 +108,12 @@ fun rememberVideoPickerLauncher(
                 // can't stick on after a failure.
                 onLoadingChanged(false)
             }
+        } catch (e: CancellationException) {
+            // The composition left mid-processing (e.g. Activity recreated): no result will ever
+            // be delivered, so clean up every file we own instead of orphaning it in cacheDir.
+            if (isLibraryOwned) context.contentResolver.delete(uri, null, null)
+            output?.takeIf { it != uri }?.let { context.contentResolver.delete(it, null, null) }
+            throw e
         } finally {
             isProcessing = false
         }
@@ -234,6 +242,11 @@ fun rememberVideoPickerLauncher(
                                 processPicked(trimUri, wasLibraryOwned)
                             }
                         }
+                    } catch (e: CancellationException) {
+                        // Same as processPicked: abandoned mid-trim, so drop a library-owned
+                        // source (no-op if it was already superseded and deleted above).
+                        if (wasLibraryOwned) context.contentResolver.delete(trimUri, null, null)
+                        throw e
                     } finally {
                         isProcessing = false
                         onLoadingChanged(false)
