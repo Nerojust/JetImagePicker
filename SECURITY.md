@@ -6,8 +6,8 @@ Only the latest published release is supported with security fixes.
 
 | Version | Supported |
 | ------- | --------- |
-| 2.1.x   | ✅        |
-| < 2.1   | ❌        |
+| 2.2.x   | ✅        |
+| < 2.2   | ❌        |
 
 ## Reporting a Vulnerability
 

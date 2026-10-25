@@ -14,11 +14,18 @@ package com.nerojust.jetimagepicker.config
  * preserving aspect ratio. Requires [targetWidth] to also be set.
  * @property allowMultiple If true, the gallery picker allows selecting more than
  * one image.
+ * @property maxSelection Optional cap on how many images the gallery picker
+ * returns when [allowMultiple] is true. Passed to the system picker; on devices
+ * whose picker ignores it, only the first [maxSelection] images are kept.
  * @property enableCrop If true, a crop step runs before compression whenever
  * exactly one image was picked/captured (camera capture always; gallery pick
- * only when a single image was selected).
+ * only when a single image was selected, unless [cropMultiple] is true).
  * @property cropAspectRatio The aspect ratio the crop region is constrained to
  * when [enableCrop] is true.
+ * @property cropMultiple If true (and [enableCrop] is true), every image in a
+ * multi-select is cropped one after another. Cancelling any crop cancels the
+ * whole pick.
+ * @property outputFormat The file format compressed images are written in.
  */
 data class JetImagePickerConfig(
     val enableCompression: Boolean = true,
@@ -27,8 +34,14 @@ data class JetImagePickerConfig(
     // Optional resizing
     val targetWidth: Int? = null,
     val targetHeight: Int? = null,
-    // For future extensibility
     val allowMultiple: Boolean = true,
     val enableCrop: Boolean = false,
     val cropAspectRatio: CropAspectRatio = CropAspectRatio.Free,
-)
+    val maxSelection: Int? = null,
+    val cropMultiple: Boolean = false,
+    val outputFormat: ImageOutputFormat = ImageOutputFormat.JPEG,
+) {
+    init {
+        require(maxSelection == null || maxSelection >= 1) { "maxSelection must be at least 1, was $maxSelection" }
+    }
+}
