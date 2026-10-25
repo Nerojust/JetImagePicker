@@ -173,7 +173,7 @@ fun rememberVideoPickerLauncher(
     val launchGallery = {
         if (!isProcessing) {
             val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-            pickMediaLauncher.launch(request)
+            if (!launchSafely("gallery") { pickMediaLauncher.launch(request) }) onVideoPicked(null, null)
         }
     }
 
@@ -208,7 +208,16 @@ fun rememberVideoPickerLauncher(
             durationLimitSeconds = config.durationLimitSeconds,
             onFinished = { file ->
                 showRecordDialog = false
-                val uri = file?.let { FileProvider.getUriForFile(context, "${context.packageName}.provider", it) }
+                val uri =
+                    file?.let {
+                        try {
+                            FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
+                        } catch (e: IllegalArgumentException) {
+                            Log.e("JetImagePicker", missingFileProviderMessage(context), e)
+                            it.delete()
+                            null
+                        }
+                    }
                 coroutineScope.launch { handlePicked(uri, isLibraryOwned = true) }
             },
         )

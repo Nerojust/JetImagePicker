@@ -15,7 +15,7 @@ should not be anyone's personality trait.
 1. Works seamlessly with Jetpack Compose, XML + Kotlin, or both.
 2. Supports Camera and Gallery — for images and videos.
 3. Gallery picking needs **no runtime permission at all** (Android's Photo Picker) — camera capture is the only permission ever requested
-4. Supports multiple image selection and compression
+4. Multiple image selection with an optional cap (`maxSelection`), and memory-safe compression to JPEG or WebP — photos come out upright on every Android version
 5. Optional crop step (free, square, or custom aspect ratio) shown automatically — no extra UI code
 6. Video: in-app recorder with flash and front/back camera switch, live duration limit, optional trim, compression and thumbnail
 7. Provides structured result callbacks for success and error handling
@@ -43,7 +43,7 @@ Then add the dependency (see the badge above for the latest version):
 
 ```kotlin
 dependencies {
-    implementation("io.github.nerojust:jetimagepicker:2.1.0")
+    implementation("io.github.nerojust:jetimagepicker:2.2.0")
 }
 ```
 
@@ -135,6 +135,7 @@ fun ImagePickerScreen() {
             enableCompression = true,
             compressionQuality = 70,
             allowMultiple = true,
+            maxSelection = 5,
             targetWidth = 1024,
             targetHeight = 1024
         )
@@ -324,6 +325,7 @@ fun VideoPickerScreen() {
 Set `enableCrop = true` and a crop dialog appears automatically — right between picking/capturing
 and compression, no extra composable needed. It applies whenever exactly one image is in play:
 always for camera capture, and for gallery picks only when a single image was selected.
+Set `cropMultiple = true` to crop every image of a multi-select, one after another.
 
 ```kotlin
 JetImagePickerConfig(
@@ -339,7 +341,33 @@ JetImagePickerConfig(
 | `Custom(ratioX, ratioY)` | Any arbitrary ratio, e.g. `Custom(16f, 9f)` for 16:9. |
 
 Cancelling the crop dialog is treated like any other cancellation in this library — an empty
-result, nothing picked.
+result, nothing picked. With `cropMultiple`, cancelling any crop cancels the whole pick.
+
+---
+
+## 🎯 Selection Limit & Output Format (2.2)
+
+Cap a multi-select and pick the file format compressed images are written in:
+
+```kotlin
+JetImagePickerConfig(
+    allowMultiple = true,
+    maxSelection = 5,                       // the picker stops at 5
+    outputFormat = ImageOutputFormat.WEBP,  // or JPEG (the default)
+)
+```
+
+- `maxSelection` is handed to Android's Photo Picker, which enforces it in its own UI. Older
+  devices without the Photo Picker fall back to the system file browser, which ignores limits —
+  so the library also trims the result to the first `maxSelection` images. `maxSelection = 1`
+  simply opens the single-image picker.
+- WebP is usually much smaller than JPEG for photos at the same `compressionQuality`.
+  `outputFormat` only applies when `enableCompression` is true.
+
+Large photos are shrunk while they're decoded (not after), so a 50 MP photo with
+`targetWidth`/`targetHeight` set won't run a low-memory phone out of memory, and photos come out
+upright on every supported Android version — EXIF rotation included. HEIC photos are converted to
+your `outputFormat` like any other image.
 
 ---
 
@@ -427,7 +455,10 @@ JetImagePickerConfig(
     targetWidth = 1024,
     targetHeight = 1024,
     enableCrop = false,
-    cropAspectRatio = CropAspectRatio.Free
+    cropAspectRatio = CropAspectRatio.Free,
+    maxSelection = null,                    // e.g. 5 — cap on a multi-select gallery pick
+    cropMultiple = false,                   // crop every image of a multi-select, not just single picks
+    outputFormat = ImageOutputFormat.JPEG,  // or WEBP — usually much smaller for photos
 )
 
 JetVideoPickerConfig(
@@ -452,6 +483,12 @@ sealed class ImagePickerResult {
     data class ShowRationale(val permission: String) : ImagePickerResult()
 }
 ```
+
+An empty `Success(emptyList())` means nothing usable came back — the user cancelled, or the
+pick couldn't go ahead (no camera app on the device, the `FileProvider` from the setup missing,
+or every image failed to decode). The library never crashes your app for these; the reason is
+logged under the Logcat tag `JetImagePicker`. With compression on, an image that can't be decoded
+is left out, so `Success` can hold fewer URIs than were picked.
 
 Video uses `VideoPickerResult`. Camera capture needs two permissions at once, so their states
 come back together in one `PermissionsRequired`:
@@ -528,6 +565,12 @@ JetImagePickerConfig(
     targetHeight = 1024 // <- skip this and targetWidth silently does nothing
 )
 ```
+
+### "I set `maxSelection = 200` but the picker stops sooner"
+
+Android's Photo Picker has its own ceiling (`MediaStore.getPickImagesMaxLimit()`, usually 100),
+and it wins. The library passes the smaller of the two, so asking for more is harmless — you just
+won't get past the system's cap.
 
 ---
 

@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.github.nerojust"
-version = "2.1.0"
+version = "2.2.0"
 
 android {
     namespace = "com.nerojust.jetimagepicker"
@@ -94,6 +94,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.easycrop)
+    implementation(libs.exifinterface)
     implementation(libs.media3.transformer)
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)

@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-10-25
+
+### Added
+- `JetImagePickerConfig.maxSelection` — caps how many images a multi-select gallery pick returns.
+  Passed to the system Photo Picker, and enforced again on the result for devices whose picker
+  falls back to the document UI (which ignores the limit). `maxSelection = 1` uses the single picker.
+- `JetImagePickerConfig.cropMultiple` — with `enableCrop`, crops every image of a multi-select one
+  after another. Cancelling any crop cancels the whole pick.
+- `JetImagePickerConfig.outputFormat` (`ImageOutputFormat.JPEG` / `WEBP`) — the format compressed
+  images are written in. JPEG remains the default.
+- The new options are appended after the existing constructor parameters, so code that passes
+  `JetImagePickerConfig` arguments by position still compiles. (As with any Kotlin data class,
+  a library compiled against 2.1.x that constructs the config needs a rebuild.)
+
+### Changed
+- `androidx.exifinterface` is now a direct dependency (it was already on the classpath through
+  CameraX, so app size doesn't change).
+
+### Fixed
+- Out-of-memory crashes when compressing very large photos with `targetWidth`/`targetHeight` set:
+  images are now downsampled while decoding instead of decoded at full size and shrunk afterward.
+- Photos coming out sideways on Android 6–8 (API 23–27): EXIF orientation is now applied when
+  compressing. (API 28+ already handled it.)
+- Intermediate crop files are deleted once compression replaces them, or when the pick is cancelled or
+  abandoned mid-way, instead of lingering in the cache.
+- Crashes that are now handled (logged, and treated like a cancelled pick or a skipped image):
+  - no camera app, or no picker/document UI, on the device (`ActivityNotFoundException`) — image
+    camera, image gallery and video gallery;
+  - the consumer's `FileProvider` missing from the manifest (image and video camera);
+  - `OutOfMemoryError` while compressing (e.g. a huge photo with no `targetWidth`/`targetHeight`);
+  - an exception thrown by the crop step;
+  - `compressionQuality` outside 0–100 (now clamped instead of dropping the image).
+- Android 9's `ImageDecoder` rejecting some downsampled EXIF-rotated JPEGs ("invalid scale"), which
+  dropped the image: decoding now falls back to `BitmapFactory` when `ImageDecoder` fails.
+- A broken EXIF block no longer fails the whole image — only the rotation is skipped.
+- The loading state is always reset after compression, even if it's interrupted.
+
 ## [2.1.0] - 2026-10-17
 
 ### Added

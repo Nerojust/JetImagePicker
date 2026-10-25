@@ -23,6 +23,11 @@ Run the full local check suite — this is exactly what CI runs:
 - Formatting is enforced by [ktlint](https://github.com/pinterest/ktlint) — run `./gradlew ktlintFormat` to auto-fix.
 - Static analysis is enforced by [detekt](https://detekt.dev/). The baseline file is a one-time snapshot taken when detekt was introduced — it is not meant to grow, so don't add new entries to it; fix new findings in your own code instead.
 - New logic (a branch, a loop, a parser, anything touching permissions or file I/O) needs a covering unit test.
+- If you touch image decoding or compression, run the instrumented tests
+  (`./gradlew :JetImagePicker:connectedDebugAndroidTest`) on an API 23–27 emulator **and** an
+  API 28+ one: below API 28 images decode through `BitmapFactory` with hand-rolled EXIF rotation,
+  above it through `ImageDecoder` (falling back to `BitmapFactory` when it fails). `CompressImageTest`
+  needs no extra setup.
 - If you touch video compression, also run the instrumented tests on a device or emulator
   (`./gradlew :JetImagePicker:connectedDebugAndroidTest`). They use sample clips that are
   gitignored — generate them first with the `ffmpeg` commands at the top of

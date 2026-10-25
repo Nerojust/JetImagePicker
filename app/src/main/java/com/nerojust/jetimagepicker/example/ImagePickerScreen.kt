@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.nerojust.jetimagepicker.config.CropAspectRatio
+import com.nerojust.jetimagepicker.config.ImageOutputFormat
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
 import com.nerojust.jetimagepicker.result.ImagePickerResult
 import com.nerojust.jetimagepicker.state.rememberJetImagePickerState
@@ -74,6 +75,7 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
     var allowMultiple by remember { mutableStateOf(false) }
     var enableCompression by remember { mutableStateOf(true) }
     var enableCrop by remember { mutableStateOf(false) }
+    var useWebp by remember { mutableStateOf(false) }
 
     val pickerState =
         rememberJetImagePickerState(
@@ -87,6 +89,9 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
                     targetHeight = 1024,
                     enableCrop = enableCrop,
                     cropAspectRatio = CropAspectRatio.Square,
+                    maxSelection = 5,
+                    cropMultiple = true,
+                    outputFormat = if (useWebp) ImageOutputFormat.WEBP else ImageOutputFormat.JPEG,
                 ),
         ) { result ->
             when (result) {
@@ -130,7 +135,7 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         LabeledSwitch(
-            label = modeLabel(allowMultiple, "Multiple selection", "Single selection"),
+            label = modeLabel(allowMultiple, "Multiple selection (up to 5)", "Single selection"),
             checked = allowMultiple,
             onCheckedChange = { allowMultiple = it },
         )
@@ -145,6 +150,12 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
             label = modeLabel(enableCrop, "Crop to square on", "Crop to square off"),
             checked = enableCrop,
             onCheckedChange = { enableCrop = it },
+        )
+
+        LabeledSwitch(
+            label = modeLabel(useWebp, "Save as WebP", "Save as JPEG"),
+            checked = useWebp,
+            onCheckedChange = { useWebp = it },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
