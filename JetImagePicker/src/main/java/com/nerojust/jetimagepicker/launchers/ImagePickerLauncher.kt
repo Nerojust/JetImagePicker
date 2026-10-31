@@ -1,14 +1,9 @@
 package com.nerojust.jetimagepicker.launchers
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.net.Uri
-import android.os.Build
-import android.os.ext.SdkExtensions
-import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -25,6 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
+import com.mr0xf00.easycrop.CropError
 import com.mr0xf00.easycrop.CropResult
 import com.mr0xf00.easycrop.crop
 import com.mr0xf00.easycrop.rememberImageCropper
@@ -32,6 +28,7 @@ import com.mr0xf00.easycrop.ui.ImageCropperDialog
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
 import com.nerojust.jetimagepicker.config.toRatioOrNull
 import com.nerojust.jetimagepicker.model.PermissionState
+import com.nerojust.jetimagepicker.result.ImagePickerResult
 import com.nerojust.jetimagepicker.utils.Utils.compressImage
 import com.nerojust.jetimagepicker.utils.Utils.createImageUri
 import com.nerojust.jetimagepicker.utils.Utils.writeBitmapToCache
@@ -55,20 +52,42 @@ fun rememberImagePickerLauncher(
     onImagesPicked: (List<Uri>) -> Unit,
     onPermissionStateChanged: (PermissionState) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
+): Pair<() -> Unit, () -> Unit> =
+    rememberImagePickerLauncherWithResults(
+        context = context,
+        config = config,
+        onImagesPicked = onImagesPicked,
+        onPermissionStateChanged = onPermissionStateChanged,
+        onLoadingChanged = onLoadingChanged,
+        onCancelled = { onImagesPicked(emptyList()) },
+        onError = { onImagesPicked(emptyList()) },
+        onOwnedUrisChanged = {},
+    )
+
+@Composable
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
+internal fun rememberImagePickerLauncherWithResults(
+    context: Context,
+    config: JetImagePickerConfig,
+    onImagesPicked: (List<Uri>) -> Unit,
+    onPermissionStateChanged: (PermissionState) -> Unit,
+    onLoadingChanged: (Boolean) -> Unit,
+    onCancelled: () -> Unit,
+    onError: (ImagePickerResult.Error) -> Unit,
+    onOwnedUrisChanged: (List<Uri>) -> Unit,
 ): Pair<() -> Unit, () -> Unit> {
-    val activity =
-        context as? Activity
-            ?: throw IllegalStateException("Context must be an Activity")
+    val activity = checkNotNull(context.findActivity()) { "Context must be or wrap an Activity" }
 
     var tempCameraUri by rememberSaveable(stateSaver = NullableUriSaver) {
         mutableStateOf<Uri?>(null)
     }
     var shouldLaunchCamera by remember { mutableStateOf(false) }
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
-    var previousCompressedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var previousOwnedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     // ponytail: boolean gate, not a mutex - fully serializes pick-and-compress cycles so
-    // previousCompressedUris is never touched by two overlapping processPicked calls.
+    // previousOwnedUris is never touched by two overlapping processPicked calls.
     var isProcessing by remember { mutableStateOf(false) }
+    val requestGate = remember { RequestGate() }
 
     val coroutineScope = rememberCoroutineScope()
     val imageCropper = rememberImageCropper()
@@ -94,72 +113,76 @@ fun rememberImagePickerLauncher(
 
     imageCropper.cropState?.let { ImageCropperDialog(it) }
 
-    // Crops each of [uris] in turn; null if the user cancels (or a crop fails) partway through.
-    @Suppress("TooGenericExceptionCaught") // A crash in the crop library must not take down the host app.
-    suspend fun cropAll(uris: List<Uri>): List<Uri>? {
-        val cropped = mutableListOf<Uri>()
-        for (uri in uris) {
-            val result =
-                try {
-                    imageCropper.crop(uri, context)
-                } catch (e: CancellationException) {
-                    // The composition left mid-crop: nobody will receive these, so don't orphan them.
-                    deleteOwnedFiles(context, cropped)
-                    throw e
-                } catch (e: Exception) {
-                    Log.e("JetImagePicker", "Crop failed for $uri", e)
-                    null
-                }
-            if (result !is CropResult.Success) {
-                // Drop crops already made earlier in a multi-select.
-                deleteOwnedFiles(context, cropped)
-                return null
-            }
-            writeBitmapToCache(context, result.bitmap.asAndroidBitmap())?.let { cropped += it }
-        }
-        return cropped
-    }
+    // Crops each of [uris] in turn and preserves cancellation versus processing failures.
+    suspend fun cropAll(uris: List<Uri>): CropBatchResult =
+        cropBatch(
+            uris = uris,
+            crop = { uri -> imageCropper.crop(uri, context) },
+            save = { bitmap -> writeBitmapToCache(context, bitmap.asAndroidBitmap()) },
+            delete = { owned -> deleteOwnedFiles(context, owned) },
+            onCropException = { uri, error -> Log.e("JetImagePicker", "Crop failed for $uri", error) },
+        )
 
-    suspend fun processPicked(uris: List<Uri>) {
+    // Empty input and crop cancellation must notify the caller immediately; the final return
+    // carries the successfully processed/fallback list back to the camera cleanup path.
+    @Suppress("ReturnCount")
+    suspend fun processPicked(
+        uris: List<Uri>,
+        libraryOwnedInputs: Set<Uri> = emptySet(),
+    ): List<Uri> {
         if (uris.isEmpty()) {
-            onImagesPicked(emptyList())
-            return
+            onCancelled()
+            return emptyList()
         }
         isProcessing = true
         try {
             val shouldCrop = config.enableCrop && (uris.size == 1 || config.cropMultiple)
-            val cropped =
+            val cropResult =
                 if (shouldCrop) {
-                    // Cancelled or failed - treat like any other cancellation in this library.
-                    cropAll(uris) ?: run {
-                        onImagesPicked(emptyList())
-                        return
-                    }
+                    cropAll(uris)
                 } else {
-                    emptyList()
+                    CropBatchResult.Success(emptyList())
+                }
+            val cropped =
+                when (cropResult) {
+                    CropBatchResult.Cancelled -> {
+                        onCancelled()
+                        return emptyList()
+                    }
+                    is CropBatchResult.Failed -> {
+                        onError(ImagePickerResult.Error(cropResult.message))
+                        return emptyList()
+                    }
+                    is CropBatchResult.Success -> cropResult.uris
                 }
             val toCompress = if (shouldCrop) cropped else uris
-
-            if (config.enableCompression) {
-                onLoadingChanged(true)
-                val compressed =
-                    try {
-                        toCompress.mapNotNull { compressImage(context, it, config) }
-                    } finally {
-                        onLoadingChanged(false)
-                        // The crops were only an intermediate step - the compressed copies replace
-                        // them, and on cancellation nobody will receive them either.
-                        deleteOwnedFiles(context, cropped)
-                    }
-                // Compressed files are ours (written to cacheDir via FileProvider) - safe to delete.
-                for (uri in previousCompressedUris) {
-                    context.contentResolver.delete(uri, null, null)
+            val finalUris =
+                if (config.enableCompression) {
+                    onLoadingChanged(true)
+                    val processed =
+                        try {
+                            toCompress.map { source ->
+                                compressionOutputOrOriginal(source, compressImage(context, source, config))
+                            }
+                        } finally {
+                            onLoadingChanged(false)
+                        }
+                    // Delete only intermediate crops that compression actually replaced. A crop
+                    // whose compression failed is now the fallback result and must stay readable.
+                    deleteOwnedFiles(context, cropped.filterNot(processed::contains))
+                    processed
+                } else {
+                    toCompress
                 }
-                previousCompressedUris = compressed
-                onImagesPicked(compressed)
-            } else {
-                onImagesPicked(toCompress)
-            }
+
+            // Track only files the library created. In particular, a gallery URI used as a
+            // compression fallback must never enter this list or a later pick would delete it.
+            val ownedFinalUris = ownedImageResults(finalUris, cropped, libraryOwnedInputs, toCompress)
+            deleteOwnedFiles(context, previousOwnedUris.filterNot(finalUris::contains))
+            previousOwnedUris = ownedFinalUris
+            onOwnedUrisChanged(ownedFinalUris)
+            onImagesPicked(finalUris)
+            return finalUris
         } finally {
             isProcessing = false
         }
@@ -170,6 +193,7 @@ fun rememberImagePickerLauncher(
         rememberLauncherForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { uri ->
+            requestGate.finish()
             Log.d("JetImagePicker", "Gallery picked: $uri")
             coroutineScope.launch { processPicked(listOfNotNull(uri)) }
         }
@@ -184,6 +208,7 @@ fun rememberImagePickerLauncher(
                 ActivityResultContracts.PickMultipleVisualMedia()
             },
         ) { uris ->
+            requestGate.finish()
             Log.d("JetImagePicker", "Gallery picked ${uris.size} image(s)")
             // Pickers that fall back to the document UI ignore the limit, so enforce it here too.
             val limited = uris.limitedTo(maxSelection)
@@ -192,23 +217,27 @@ fun rememberImagePickerLauncher(
 
     val cameraLauncher =
         rememberLauncherForActivityResult(TakePicture()) { success ->
+            requestGate.finish()
             val capturedUri = tempCameraUri
             if (success && capturedUri != null) {
                 coroutineScope.launch {
-                    processPicked(listOf(capturedUri))
-                    // Compression (if enabled) superseded this raw capture with a new file that's
-                    // now tracked in previousCompressedUris - the raw temp file is otherwise never
-                    // cleaned up and would leak in cacheDir. Leave it alone when compression is
-                    // disabled: capturedUri is then the live selection handed to onImagesPicked.
-                    if (config.enableCompression) {
-                        context.contentResolver.delete(capturedUri, null, null)
+                    var finalUris: List<Uri>? = null
+                    try {
+                        finalUris = processPicked(listOf(capturedUri), setOf(capturedUri))
+                    } finally {
+                        // Also runs when the composition is cancelled during crop/compression, so
+                        // a raw capture cannot be orphaned across Activity recreation.
+                        if (capturedUri !in finalUris.orEmpty()) {
+                            context.contentResolver.delete(capturedUri, null, null)
+                        }
+                        tempCameraUri = null
                     }
                 }
             } else {
                 // Capture was cancelled/failed - clean up the temp file we created for it.
                 capturedUri?.let { context.contentResolver.delete(it, null, null) }
                 tempCameraUri = null
-                onImagesPicked(emptyList())
+                onCancelled()
             }
         }
 
@@ -226,6 +255,8 @@ fun rememberImagePickerLauncher(
             onPermissionStateChanged(state)
             if (granted) {
                 shouldLaunchCamera = true
+            } else {
+                requestGate.finish()
             }
         }
 
@@ -237,20 +268,23 @@ fun rememberImagePickerLauncher(
                 try {
                     createImageUri(context)
                 } catch (e: IllegalArgumentException) {
+                    requestGate.finish()
                     Log.e("JetImagePicker", missingFileProviderMessage(context), e)
-                    onImagesPicked(emptyList())
+                    onError(ImagePickerResult.Error(missingFileProviderMessage(context)))
                     return@LaunchedEffect
                 }
             tempCameraUri = uri
             if (!launchSafely("camera") { cameraLauncher.launch(uri) }) {
+                context.contentResolver.delete(uri, null, null)
                 tempCameraUri = null
-                onImagesPicked(emptyList())
+                requestGate.finish()
+                onError(ImagePickerResult.Error("No app is available to capture an image"))
             }
         }
     }
 
     val launchGallery = {
-        if (!isProcessing) {
+        if (!isProcessing && requestGate.tryStart()) {
             val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             val launched =
                 launchSafely("gallery") {
@@ -260,12 +294,15 @@ fun rememberImagePickerLauncher(
                         singlePickMediaLauncher.launch(request)
                     }
                 }
-            if (!launched) onImagesPicked(emptyList())
+            if (!launched) {
+                requestGate.finish()
+                onError(ImagePickerResult.Error("No app is available to pick an image"))
+            }
         }
     }
 
     val launchCamera = {
-        if (!isProcessing) {
+        if (!isProcessing && requestGate.tryStart()) {
             val state =
                 calculatePermissionState(
                     activity = activity,
@@ -300,6 +337,57 @@ internal inline fun launchSafely(
         false
     }
 
+internal sealed interface CropBatchResult {
+    data class Success(val uris: List<Uri>) : CropBatchResult
+
+    data object Cancelled : CropBatchResult
+
+    data class Failed(val message: String) : CropBatchResult
+}
+
+/** Processes a crop batch with injectable I/O so save failures and partial-output cleanup are testable. */
+@Suppress("TooGenericExceptionCaught", "ReturnCount")
+internal suspend fun cropBatch(
+    uris: List<Uri>,
+    crop: suspend (Uri) -> CropResult,
+    save: (androidx.compose.ui.graphics.ImageBitmap) -> Uri?,
+    delete: (List<Uri>) -> Unit,
+    onCropException: (Uri, Exception) -> Unit = { _, _ -> },
+): CropBatchResult {
+    val cropped = mutableListOf<Uri>()
+    for (uri in uris) {
+        val result =
+            try {
+                crop(uri)
+            } catch (e: CancellationException) {
+                delete(cropped)
+                throw e
+            } catch (e: Exception) {
+                onCropException(uri, e)
+                delete(cropped)
+                return CropBatchResult.Failed("Failed to crop the selected image")
+            }
+        when (result) {
+            CropResult.Cancelled -> {
+                delete(cropped)
+                return CropBatchResult.Cancelled
+            }
+            is CropError -> {
+                delete(cropped)
+                return CropBatchResult.Failed("Crop failed: ${result.name}")
+            }
+            is CropResult.Success -> Unit
+        }
+        val saved = save(result.bitmap)
+        if (saved == null) {
+            delete(cropped)
+            return CropBatchResult.Failed("Failed to save the cropped image")
+        }
+        cropped += saved
+    }
+    return CropBatchResult.Success(cropped)
+}
+
 /** Deletes cache files this library wrote itself (never call it with a gallery URI). */
 internal fun deleteOwnedFiles(
     context: Context,
@@ -311,34 +399,3 @@ internal fun deleteOwnedFiles(
 /** Logged when the consumer's manifest lacks the FileProvider the README's setup asks for. */
 internal fun missingFileProviderMessage(context: Context): String =
     "No FileProvider for \"${context.packageName}.provider\" - see the README setup"
-
-/** Whether a gallery pick uses the multi-select picker for this [config]. */
-internal fun usesMultiPicker(config: JetImagePickerConfig): Boolean = config.allowMultiple && config.maxSelection != 1
-
-/**
- * The limit to hand the multi-select contract, which rejects anything below 2 or above the
- * system picker's own maximum.
- */
-internal fun pickerMaxItems(
-    maxSelection: Int,
-    systemLimit: Int,
-): Int = maxSelection.coerceIn(2, maxOf(2, systemLimit))
-
-/** The first [max] items, or all of them when there is no limit. */
-internal fun <T> List<T>.limitedTo(max: Int?): List<T> = if (max == null) this else take(max)
-
-/** The most items Android's Photo Picker lets one request ask for, or no limit where it isn't available. */
-private fun systemPickLimit(): Int = runCatching { platformPickLimit() }.getOrDefault(Int.MAX_VALUE)
-
-@SuppressLint("NewApi") // getPickImagesMaxLimit exists exactly where the check below says it does.
-private fun platformPickLimit(): Int =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ||
-        (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-                SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2
-        )
-    ) {
-        MediaStore.getPickImagesMaxLimit()
-    } else {
-        Int.MAX_VALUE
-    }

@@ -53,6 +53,10 @@ private fun describeVideoPickerResult(result: VideoPickerResult): Pair<String?, 
             null to result.thumbnailUri
         }
 
+        VideoPickerResult.Cancelled -> "Video selection cancelled." to null
+
+        is VideoPickerResult.Error -> result.message to null
+
         is VideoPickerResult.DurationExceeded ->
             "Video is longer than ${result.limitSeconds}s limit." to null
 

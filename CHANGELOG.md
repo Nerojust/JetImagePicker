@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-10-31
+
+This release changes the public result types, so code that handles them in an exhaustive `when`
+needs updating.
+
+### Migrating from 2.x
+- Add branches for the new `ImagePickerResult.Cancelled` / `ImagePickerResult.Error` and
+  `VideoPickerResult.Cancelled` / `VideoPickerResult.Error` cases.
+- A cancelled video pick used to arrive as `VideoPickerResult.Success(uri = null, ...)`; it now
+  arrives as `VideoPickerResult.Cancelled`, and `VideoPickerResult.Success.uri` is now a non-null
+  `Uri`. Drop any `uri == null` checks and `!!` / `?.` on it. The low-level
+  `rememberVideoPickerLauncher` callback is unchanged: `null` there still means cancelled.
+- Invalid config values now throw `IllegalArgumentException` when the config is built:
+  `targetWidth`/`targetHeight` <= 0, `durationLimitSeconds` <= 0, and `CropAspectRatio.Custom`
+  with a ratio that is zero, negative, or not finite.
+- Library-created files may now be deleted after the Activity finishes. Copy any file you need
+  to keep (see "How long returned files live" in the README).
+
+### Added
+- `Cancelled` and `Error(message)` results for images and video, so a dismissed picker, crop, trim
+  or recorder is distinct from a failure (no picker app, missing FileProvider, crop/save failure,
+  camera or recording failure, unreadable video duration).
+- `clearSelection()` now deletes the cache files the library created for the current selection.
+- Library-created files are deleted when the Activity finishes (not on configuration changes), and
+  files older than 24 hours are pruned, so abandoned outputs no longer pile up in the cache.
+
+### Changed
+- Library files are written to `cacheDir/jetimagepicker/` instead of the cache root, so cleanup can
+  never touch the host app's own cache files. The README's `<cache-path path="." />` already covers
+  this folder; a FileProvider limited to a different cache sub-path needs updating.
+- `rememberJetImagePickerState` / `rememberJetVideoPickerState` accept any Context that wraps an
+  Activity, not only an Activity itself.
+- A second launch while a picker, permission prompt or camera is already open is ignored.
+- An image that can't be compressed is returned as its original URI instead of being dropped, so
+  `ImagePickerResult.Success` holds one URI per picked image.
+
+### Fixed
+- Video duration limits compared whole seconds, so a 10.9s clip passed a 10s limit; they now
+  compare milliseconds. When a limit is set and the duration can't be read, the pick fails with
+  `Error` and is not accepted.
+- A camera capture's raw file is no longer orphaned when the screen is closed mid-crop or
+  mid-compression, or when no camera app is available.
+- Old video thumbnails are deleted when a new video replaces them.
+
 ## [2.2.0] - 2026-10-25
 
 ### Added

@@ -10,7 +10,7 @@ import androidx.compose.runtime.State
  * @property isLoading True while picked/captured video is being compressed.
  * @property pickFromGallery Launches the gallery picker (Photo Picker, video-only) on supported devices).
  * @property captureWithCamera Launches the system camera to record a new video.
- * @property clearSelection Resets [selectedVideoUri] to null.
+ * @property clearSelection Resets the selection and deletes cache files created by the library.
  */
 class JetVideoPickerState internal constructor(
     private val _selectedVideoUri: State<Uri?>,

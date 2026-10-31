@@ -43,7 +43,7 @@ Then add the dependency (see the badge above for the latest version):
 
 ```kotlin
 dependencies {
-    implementation("io.github.nerojust:jetimagepicker:2.2.0")
+    implementation("io.github.nerojust:jetimagepicker:3.0.0")
 }
 ```
 
@@ -142,6 +142,8 @@ fun ImagePickerScreen() {
     ) { result ->
         when (result) {
             is ImagePickerResult.Success -> message = null
+            ImagePickerResult.Cancelled -> message = null
+            is ImagePickerResult.Error -> message = result.message
             is ImagePickerResult.PermissionDenied -> {
                 message = "Permission denied: ${result.permission}"
                 //go ahead, all good
@@ -251,10 +253,11 @@ fun VideoPickerScreen() {
     ) { result ->
         when (result) {
             is VideoPickerResult.Success -> {
-                // uri == null means the user cancelled
                 thumbnailUri = result.thumbnailUri
                 message = null
             }
+            VideoPickerResult.Cancelled -> message = null
+            is VideoPickerResult.Error -> message = result.message
             is VideoPickerResult.DurationExceeded -> {
                 message = "Please pick a video under ${result.limitSeconds}s."
             }
@@ -388,6 +391,8 @@ val videoPickerState = rememberJetVideoPickerState(
 ) { result ->
     when (result) {
         is VideoPickerResult.Success -> { /* result.uri, result.thumbnailUri */ }
+        VideoPickerResult.Cancelled -> { /* user dismissed the flow */ }
+        is VideoPickerResult.Error -> { /* result.message */ }
         is VideoPickerResult.DurationExceeded -> { /* result.uri exceeded result.limitSeconds */ }
         is VideoPickerResult.PermissionsRequired -> { /* result.denied, result.permanentlyDenied, result.shouldShowRationaleFor */ }
     }
@@ -478,24 +483,29 @@ Use the `ImagePickerResult` sealed class:
 ```kotlin
 sealed class ImagePickerResult {
     data class Success(val uris: List<Uri>) : ImagePickerResult()
+    data object Cancelled : ImagePickerResult()
+    data class Error(val message: String) : ImagePickerResult()
     data class PermissionDenied(val permission: String) : ImagePickerResult()
     data class PermissionPermanentlyDenied(val permission: String) : ImagePickerResult()
     data class ShowRationale(val permission: String) : ImagePickerResult()
 }
 ```
 
-An empty `Success(emptyList())` means nothing usable came back — the user cancelled, or the
-pick couldn't go ahead (no camera app on the device, the `FileProvider` from the setup missing,
-or every image failed to decode). The library never crashes your app for these; the reason is
-logged under the Logcat tag `JetImagePicker`. With compression on, an image that can't be decoded
-is left out, so `Success` can hold fewer URIs than were picked.
+`Cancelled` means the user backed out of the picker, camera or crop. `Error` means the pick
+couldn't go ahead — no picker or camera app on the device, the `FileProvider` from the setup
+missing, or a crop that failed — and `message` says which. The library never crashes your app for
+these; details are also logged under the Logcat tag `JetImagePicker`. With compression on, an
+image that can't be compressed comes back as its original URI, so `Success` always holds one URI
+per picked image.
 
 Video uses `VideoPickerResult`. Camera capture needs two permissions at once, so their states
 come back together in one `PermissionsRequired`:
 
 ```kotlin
 sealed class VideoPickerResult {
-    data class Success(val uri: Uri?, val thumbnailUri: Uri?) : VideoPickerResult() // uri == null: cancelled
+    data class Success(val uri: Uri, val thumbnailUri: Uri?) : VideoPickerResult()
+    data object Cancelled : VideoPickerResult()
+    data class Error(val message: String) : VideoPickerResult()
     data class DurationExceeded(val uri: Uri, val limitSeconds: Int) : VideoPickerResult()
     data class PermissionsRequired(
         val denied: List<String>,
@@ -519,7 +529,7 @@ sealed class VideoPickerResult {
 | `isLoading` | `true` while picked images are being compressed. |
 | `pickFromGallery` | Launches the gallery picker (Photo Picker on supported devices). |
 | `captureWithCamera` | Launches the system camera to capture a new photo. |
-| `clearSelection` | Resets `selectedImageUris`/`selectedImageUri` back to empty. |
+| `clearSelection` | Resets `selectedImageUris`/`selectedImageUri` to empty and deletes the cache files the library created for them. |
 
 ## 📋 `JetVideoPickerState` Reference
 
@@ -529,7 +539,22 @@ sealed class VideoPickerResult {
 | `isLoading` | `true` while the video is being compressed or trimmed. |
 | `pickFromGallery` | Launches the Photo Picker for a video. |
 | `captureWithCamera` | Requests `CAMERA` + `RECORD_AUDIO` if needed, then opens the in-app recorder. |
-| `clearSelection` | Resets `selectedVideoUri` back to `null`. |
+| `clearSelection` | Resets `selectedVideoUri` to `null` and deletes the cache files the library created for it (video and thumbnail). |
+
+### 🗑️ How long returned files live
+
+Crops, compressed images, camera captures, recordings, trims and thumbnails are written to
+`cacheDir/jetimagepicker/`. Gallery URIs you picked are never deleted. Files the library created
+are deleted when:
+
+- a newer pick replaces them,
+- you call `clearSelection()`,
+- the Activity finishes for good (not on rotation or other configuration changes),
+- they are more than 24 hours old (checked when a picker state is created, to catch files left
+  behind when Android killed the process).
+
+If you need a result after any of these — for example, an upload that keeps running after the
+user leaves the screen — copy the file somewhere you own first.
 
 ---
 

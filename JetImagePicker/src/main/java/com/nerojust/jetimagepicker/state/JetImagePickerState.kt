@@ -11,7 +11,7 @@ import androidx.compose.runtime.State
  * @property isLoading True while picked images are being compressed.
  * @property pickFromGallery Launches the gallery picker (Photo Picker on supported devices).
  * @property captureWithCamera Launches the system camera to capture a new photo.
- * @property clearSelection Resets [selectedImageUris]/[selectedImageUri] to empty.
+ * @property clearSelection Resets the selection and deletes cache files created by the library.
  */
 class JetImagePickerState internal constructor(
     private val _selectedImageUris: State<List<Uri>>,
