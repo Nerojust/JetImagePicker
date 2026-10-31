@@ -2,10 +2,19 @@ package com.nerojust.jetimagepicker.launchers
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.nerojust.jetimagepicker.model.PermissionState
+
+/** Finds the Activity behind common themed/context wrappers used by Compose hosts. */
+internal tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 /**
  * Computes the current [PermissionState] for [permission], used by both picker launchers to

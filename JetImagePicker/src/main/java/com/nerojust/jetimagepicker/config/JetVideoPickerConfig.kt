@@ -19,4 +19,10 @@ data class JetVideoPickerConfig(
     val enableThumbnail: Boolean = true,
     val durationLimitSeconds: Int? = null,
     val enableTrim: Boolean = false,
-)
+) {
+    init {
+        require(durationLimitSeconds == null || durationLimitSeconds > 0) {
+            "durationLimitSeconds must be greater than 0, was $durationLimitSeconds"
+        }
+    }
+}

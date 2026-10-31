@@ -13,4 +13,14 @@ class JetVideoPickerConfigTest {
         assertTrue(config.enableThumbnail)
         assertNull(config.durationLimitSeconds)
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `zero duration limit is rejected`() {
+        JetVideoPickerConfig(durationLimitSeconds = 0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `negative duration limit is rejected`() {
+        JetVideoPickerConfig(durationLimitSeconds = -1)
+    }
 }

@@ -8,14 +8,20 @@ import android.net.Uri
  */
 sealed class VideoPickerResult {
     /**
-     * A video was picked/captured, or the operation was cancelled.
+     * A video was picked or captured successfully.
      *
-     * @property uri The resulting video, or `null` if the pick/capture was cancelled.
+     * @property uri The resulting video. Cancellation is reported as [Cancelled], never as a `Success`.
      * @property thumbnailUri The extracted thumbnail frame, or `null` if
-     * [com.nerojust.jetimagepicker.config.JetVideoPickerConfig.enableThumbnail] is false, or [uri]
-     * is null.
+     * [com.nerojust.jetimagepicker.config.JetVideoPickerConfig.enableThumbnail] is false or no frame
+     * could be extracted.
      */
-    data class Success(val uri: Uri?, val thumbnailUri: Uri?) : VideoPickerResult()
+    data class Success(val uri: Uri, val thumbnailUri: Uri?) : VideoPickerResult()
+
+    /** The user dismissed the picker, recorder, or trim flow. */
+    data object Cancelled : VideoPickerResult()
+
+    /** The operation could not complete. [message] is suitable for logging or user feedback. */
+    data class Error(val message: String) : VideoPickerResult()
 
     /**
      * [uri]'s duration exceeds the configured [limitSeconds]; no [Success] was returned for it.

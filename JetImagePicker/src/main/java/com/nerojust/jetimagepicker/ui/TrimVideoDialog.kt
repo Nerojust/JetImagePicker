@@ -46,7 +46,8 @@ private const val MIN_TRIM_LENGTH_MS = 1000L
  * [uri] via a range slider, with a static frame preview at each handle's current position.
  *
  * @param onConfirm Called with the chosen trim range once the user confirms.
- * @param onCancel Called if the user cancels, or if the video's duration can't be read at all.
+ * @param onCancel Called if the user cancels.
+ * @param onError Called if the video's duration cannot be read.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +55,7 @@ internal fun TrimVideoDialog(
     uri: Uri,
     onConfirm: (startMs: Long, endMs: Long) -> Unit,
     onCancel: () -> Unit,
+    onError: (String) -> Unit,
 ) {
     val context = LocalContext.current
     var durationMs by remember { mutableStateOf<Long?>(null) }
@@ -65,7 +67,7 @@ internal fun TrimVideoDialog(
     LaunchedEffect(uri) {
         val duration = VideoUtils.getVideoDurationMillis(context, uri)
         if (duration == null || duration <= 0) {
-            onCancel()
+            onError("Could not read the selected video's duration")
             return@LaunchedEffect
         }
         if (duration < MIN_TRIM_LENGTH_MS) {

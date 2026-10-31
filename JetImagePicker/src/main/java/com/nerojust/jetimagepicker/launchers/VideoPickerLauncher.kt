@@ -1,7 +1,6 @@
 package com.nerojust.jetimagepicker.launchers
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -20,6 +19,7 @@ import com.nerojust.jetimagepicker.config.JetVideoPickerConfig
 import com.nerojust.jetimagepicker.result.VideoPickerResult
 import com.nerojust.jetimagepicker.result.toPermissionsRequiredOrNull
 import com.nerojust.jetimagepicker.ui.RecordVideoDialog
+import com.nerojust.jetimagepicker.ui.RecordingResult
 import com.nerojust.jetimagepicker.ui.TrimVideoDialog
 import com.nerojust.jetimagepicker.utils.VideoUtils
 import kotlinx.coroutines.CancellationException
@@ -43,10 +43,33 @@ fun rememberVideoPickerLauncher(
     onDurationExceeded: (Uri, Int) -> Unit,
     onPermissionsRequired: (VideoPickerResult.PermissionsRequired) -> Unit,
     onLoadingChanged: (Boolean) -> Unit,
+): Pair<() -> Unit, () -> Unit> =
+    rememberVideoPickerLauncherWithResults(
+        context = context,
+        config = config,
+        onVideoPicked = onVideoPicked,
+        onDurationExceeded = onDurationExceeded,
+        onPermissionsRequired = onPermissionsRequired,
+        onLoadingChanged = onLoadingChanged,
+        onCancelled = { onVideoPicked(null, null) },
+        onError = { onVideoPicked(null, null) },
+        onOwnedUrisChanged = {},
+    )
+
+@Composable
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
+internal fun rememberVideoPickerLauncherWithResults(
+    context: Context,
+    config: JetVideoPickerConfig,
+    onVideoPicked: (uri: Uri, thumbnailUri: Uri?) -> Unit,
+    onDurationExceeded: (Uri, Int) -> Unit,
+    onPermissionsRequired: (VideoPickerResult.PermissionsRequired) -> Unit,
+    onLoadingChanged: (Boolean) -> Unit,
+    onCancelled: () -> Unit,
+    onError: (VideoPickerResult.Error) -> Unit,
+    onOwnedUrisChanged: (List<Uri>) -> Unit,
 ): Pair<() -> Unit, () -> Unit> {
-    val activity =
-        context as? Activity
-            ?: throw IllegalStateException("Context must be an Activity")
+    val activity = checkNotNull(context.findActivity()) { "Context must be or wrap an Activity" }
 
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
     var hasAudioPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
@@ -54,26 +77,34 @@ fun rememberVideoPickerLauncher(
     var pendingTrimUri by rememberSaveable(stateSaver = NullableUriSaver) { mutableStateOf(null) }
     var pendingTrimIsLibraryOwned by rememberSaveable { mutableStateOf(false) }
     var previousOutputUri by remember { mutableStateOf<Uri?>(null) }
+    var previousThumbnailUri by remember { mutableStateOf<Uri?>(null) }
     // ponytail: boolean gate, not a mutex - fully serializes pick-and-process cycles, same
     // pattern as ImagePickerLauncher's isProcessing.
     var isProcessing by remember { mutableStateOf(false) }
+    val requestGate = remember { RequestGate() }
 
     val coroutineScope = rememberCoroutineScope()
 
+    @Suppress("ReturnCount")
     suspend fun processPicked(
         uri: Uri?,
         isLibraryOwned: Boolean = false,
     ) {
         if (uri == null) {
-            onVideoPicked(null, null)
+            onCancelled()
             return
         }
         isProcessing = true
         var output: Uri? = null
         try {
-            val durationSeconds = VideoUtils.getVideoDurationSeconds(context, uri)
+            val durationMillis = VideoUtils.getVideoDurationMillis(context, uri)
             val limitSeconds = config.durationLimitSeconds
-            if (VideoUtils.isDurationExceeded(durationSeconds, limitSeconds) && limitSeconds != null) {
+            if (durationMillis == null && limitSeconds != null) {
+                onError(VideoPickerResult.Error("Could not read video duration to enforce the configured limit"))
+                if (isLibraryOwned) context.contentResolver.delete(uri, null, null)
+                return
+            }
+            if (VideoUtils.isDurationExceeded(durationMillis, limitSeconds) && limitSeconds != null) {
                 onDurationExceeded(uri, limitSeconds)
                 // Nothing supersedes the raw capture on this path (it is never returned to the
                 // caller), so clean it up now that onDurationExceeded has been notified. Never
@@ -86,7 +117,8 @@ fun rememberVideoPickerLauncher(
 
             onLoadingChanged(true)
             try {
-                output = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
+                val ready = if (config.enableCompression) VideoUtils.compressVideo(context, uri) ?: uri else uri
+                output = ready
 
                 // A compressed output is ours (written to cacheDir via FileProvider) - safe to
                 // delete once superseded. Never delete the caller's original picked/captured uri.
@@ -101,7 +133,12 @@ fun rememberVideoPickerLauncher(
 
                 val thumbnailUri =
                     if (config.enableThumbnail) VideoUtils.extractVideoThumbnail(context, output) else null
-                onVideoPicked(output, thumbnailUri)
+                previousThumbnailUri?.takeIf { it != thumbnailUri }?.let {
+                    context.contentResolver.delete(it, null, null)
+                }
+                previousThumbnailUri = thumbnailUri
+                onOwnedUrisChanged(ownedVideoResults(uri, output, isLibraryOwned, thumbnailUri))
+                onVideoPicked(ready, thumbnailUri)
                 Log.d("JetImagePicker", "Video ready: $output, thumbnail: $thumbnailUri")
             } finally {
                 // Guaranteed on every exit path once loading started, so the caller's spinner
@@ -124,7 +161,7 @@ fun rememberVideoPickerLauncher(
         isLibraryOwned: Boolean = false,
     ) {
         if (uri == null) {
-            onVideoPicked(null, null)
+            onCancelled()
             return
         }
         if (config.enableTrim) {
@@ -140,6 +177,7 @@ fun rememberVideoPickerLauncher(
         rememberLauncherForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { uri ->
+            requestGate.finish()
             Log.d("JetImagePicker", "Gallery picked video: $uri")
             coroutineScope.launch { handlePicked(uri) }
         }
@@ -164,6 +202,7 @@ fun rememberVideoPickerLauncher(
             hasAudioPermissionBeenRequested = true
             val permissionsRequired = toPermissionsRequiredOrNull(cameraState, audioState)
             if (permissionsRequired != null) {
+                requestGate.finish()
                 onPermissionsRequired(permissionsRequired)
             } else {
                 showRecordDialog = true
@@ -171,14 +210,17 @@ fun rememberVideoPickerLauncher(
         }
 
     val launchGallery = {
-        if (!isProcessing) {
+        if (!isProcessing && requestGate.tryStart()) {
             val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-            if (!launchSafely("gallery") { pickMediaLauncher.launch(request) }) onVideoPicked(null, null)
+            if (!launchSafely("gallery") { pickMediaLauncher.launch(request) }) {
+                requestGate.finish()
+                onError(VideoPickerResult.Error("No app is available to pick a video"))
+            }
         }
     }
 
     val launchCamera = {
-        if (!isProcessing) {
+        if (!isProcessing && requestGate.tryStart()) {
             val cameraState =
                 calculatePermissionState(
                     activity = activity,
@@ -206,19 +248,26 @@ fun rememberVideoPickerLauncher(
     if (showRecordDialog) {
         RecordVideoDialog(
             durationLimitSeconds = config.durationLimitSeconds,
-            onFinished = { file ->
+            onFinished = { result ->
                 showRecordDialog = false
-                val uri =
-                    file?.let {
-                        try {
-                            FileProvider.getUriForFile(context, "${context.packageName}.provider", it)
-                        } catch (e: IllegalArgumentException) {
-                            Log.e("JetImagePicker", missingFileProviderMessage(context), e)
-                            it.delete()
-                            null
-                        }
+                requestGate.finish()
+                when (result) {
+                    RecordingResult.Cancelled -> onCancelled()
+                    is RecordingResult.Error -> onError(VideoPickerResult.Error(result.message))
+                    is RecordingResult.Success -> {
+                        val file = result.file
+                        val uri =
+                            try {
+                                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                            } catch (e: IllegalArgumentException) {
+                                Log.e("JetImagePicker", missingFileProviderMessage(context), e)
+                                file.delete()
+                                onError(VideoPickerResult.Error(missingFileProviderMessage(context)))
+                                null
+                            }
+                        if (uri != null) coroutineScope.launch { handlePicked(uri, isLibraryOwned = true) }
                     }
-                coroutineScope.launch { handlePicked(uri, isLibraryOwned = true) }
+                }
             },
         )
     }
@@ -271,8 +320,15 @@ fun rememberVideoPickerLauncher(
                     // picker's crop-cancel behavior. Clean up a library-owned raw capture since
                     // it's being fully abandoned; never touch a caller-owned gallery uri.
                     if (wasLibraryOwned) context.contentResolver.delete(trimUri, null, null)
-                    onVideoPicked(null, null)
+                    onCancelled()
                 }
+            },
+            onError = { message ->
+                val wasLibraryOwned = pendingTrimIsLibraryOwned
+                pendingTrimUri = null
+                pendingTrimIsLibraryOwned = false
+                if (wasLibraryOwned) context.contentResolver.delete(trimUri, null, null)
+                onError(VideoPickerResult.Error(message))
             },
         )
     }

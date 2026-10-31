@@ -100,6 +100,15 @@ fun ImagePickerScreen(modifier: Modifier = Modifier) {
                     Log.d("ImagePicker", "Images selected: ${result.uris.size} URIs: ${result.uris}")
                 }
 
+                ImagePickerResult.Cancelled -> {
+                    message = "Image selection cancelled."
+                }
+
+                is ImagePickerResult.Error -> {
+                    message = result.message
+                    Log.e("ImagePicker", result.message)
+                }
+
                 is ImagePickerResult.PermissionDenied -> {
                     message = "Permission denied: ${result.permission}"
                     Log.d("ImagePicker", "Permission denied: ${result.permission}")

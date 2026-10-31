@@ -22,6 +22,9 @@ media3 = "1.11.1"
 cameraX = "1.6.2"
 exifinterface = "1.4.2"
 vanniktechPublish = "0.37.0"
+robolectric = "4.17"
+androidxTestCore = "1.7.0"
+uiautomator = "2.4.0-alpha05"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -55,6 +58,9 @@ camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.r
 camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraX" }
 camera-video = { group = "androidx.camera", name = "camera-video", version.ref = "cameraX" }
 camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraX" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTestCore" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

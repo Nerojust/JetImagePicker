@@ -56,6 +56,14 @@ import java.io.File
 
 private const val NANOS_PER_SECOND = 1_000_000_000L
 
+internal sealed interface RecordingResult {
+    data class Success(val file: File) : RecordingResult
+
+    data object Cancelled : RecordingResult
+
+    data class Error(val message: String) : RecordingResult
+}
+
 // Same as the launchers (baselined): one composable owning the camera/recording lifecycle reads
 // more clearly than splitting its tightly-coupled state across helpers.
 
@@ -65,15 +73,13 @@ private const val NANOS_PER_SECOND = 1_000_000_000L
  * `captureWithCamera()` is called. Records via CameraX so [durationLimitSeconds] is enforced
  * live, rather than depending on the system camera app to honor a request it can ignore.
  *
- * @param onFinished Called with the recorded [File] on success (including a recording cut short by
- * the app going to the background), or `null` if the user cancelled, the camera failed to bind, or
- * recording finalized with any other error (all treated the same way).
+ * @param onFinished Reports success, cancellation, or a recording/camera failure distinctly.
  */
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun RecordVideoDialog(
     durationLimitSeconds: Int?,
-    onFinished: (File?) -> Unit,
+    onFinished: (RecordingResult) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -103,7 +109,7 @@ internal fun RecordVideoDialog(
             isCancelled = true
             recording?.stop()
         } else {
-            onFinished(null)
+            onFinished(RecordingResult.Cancelled)
         }
     }
 
@@ -132,7 +138,7 @@ internal fun RecordVideoDialog(
             // IllegalArgumentException (unsupported use-case combination) from bindToLifecycle -
             // both must degrade to onFinished(null) rather than crash the host app.
             Log.e("JetImagePicker", "Failed to initialize camera", e)
-            onFinished(null)
+            onFinished(RecordingResult.Error("Failed to initialize the camera"))
         }
     }
 
@@ -163,7 +169,7 @@ internal fun RecordVideoDialog(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            onFinished(null)
+            onFinished(RecordingResult.Error("Microphone permission is no longer granted"))
             return
         }
         isCancelled = false
@@ -200,7 +206,7 @@ internal fun RecordVideoDialog(
             // upstream permission check - must degrade to onFinished(null), not crash.
             Log.e("JetImagePicker", "Failed to start video recording", e)
             if (file.exists()) file.delete()
-            onFinished(null)
+            onFinished(RecordingResult.Error("Failed to start video recording"))
         }
     }
 
@@ -241,7 +247,7 @@ private fun handleFinalize(
     event: VideoRecordEvent.Finalize,
     file: File,
     isCancelled: Boolean,
-    onFinished: (File?) -> Unit,
+    onFinished: (RecordingResult) -> Unit,
 ) {
     // ERROR_SOURCE_INACTIVE (app backgrounded, e.g. an incoming call) still finalizes a valid,
     // playable file - keep it rather than throwing the user's clip away.
@@ -251,9 +257,13 @@ private fun handleFinalize(
     }
     if (isCancelled || failed) {
         file.delete()
-        onFinished(null)
+        if (isCancelled) {
+            onFinished(RecordingResult.Cancelled)
+        } else {
+            onFinished(RecordingResult.Error("Video recording failed with CameraX error ${event.error}"))
+        }
     } else {
-        onFinished(file)
+        onFinished(RecordingResult.Success(file))
     }
 }
 
