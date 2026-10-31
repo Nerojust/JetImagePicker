@@ -56,4 +56,14 @@ class GalleryLimitTest {
         assertEquals(picked, picked.limitedTo(null))
         assertEquals(emptyList<String>(), emptyList<String>().limitedTo(3))
     }
+
+    @Test
+    fun `successful compression uses its output`() {
+        assertEquals("compressed", compressionOutputOrOriginal("original", "compressed"))
+    }
+
+    @Test
+    fun `failed compression preserves the original`() {
+        assertEquals("original", compressionOutputOrOriginal("original", null))
+    }
 }

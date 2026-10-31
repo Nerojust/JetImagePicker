@@ -65,9 +65,9 @@ fun rememberImagePickerLauncher(
     }
     var shouldLaunchCamera by remember { mutableStateOf(false) }
     var hasCameraPermissionBeenRequested by rememberSaveable { mutableStateOf(false) }
-    var previousCompressedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var previousOwnedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     // ponytail: boolean gate, not a mutex - fully serializes pick-and-compress cycles so
-    // previousCompressedUris is never touched by two overlapping processPicked calls.
+    // previousOwnedUris is never touched by two overlapping processPicked calls.
     var isProcessing by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -120,10 +120,16 @@ fun rememberImagePickerLauncher(
         return cropped
     }
 
-    suspend fun processPicked(uris: List<Uri>) {
+    // Empty input and crop cancellation must notify the caller immediately; the final return
+    // carries the successfully processed/fallback list back to the camera cleanup path.
+    @Suppress("ReturnCount")
+    suspend fun processPicked(
+        uris: List<Uri>,
+        libraryOwnedInputs: Set<Uri> = emptySet(),
+    ): List<Uri> {
         if (uris.isEmpty()) {
             onImagesPicked(emptyList())
-            return
+            return emptyList()
         }
         isProcessing = true
         try {
@@ -133,33 +139,41 @@ fun rememberImagePickerLauncher(
                     // Cancelled or failed - treat like any other cancellation in this library.
                     cropAll(uris) ?: run {
                         onImagesPicked(emptyList())
-                        return
+                        return emptyList()
                     }
                 } else {
                     emptyList()
                 }
             val toCompress = if (shouldCrop) cropped else uris
-
-            if (config.enableCompression) {
-                onLoadingChanged(true)
-                val compressed =
-                    try {
-                        toCompress.mapNotNull { compressImage(context, it, config) }
-                    } finally {
-                        onLoadingChanged(false)
-                        // The crops were only an intermediate step - the compressed copies replace
-                        // them, and on cancellation nobody will receive them either.
-                        deleteOwnedFiles(context, cropped)
-                    }
-                // Compressed files are ours (written to cacheDir via FileProvider) - safe to delete.
-                for (uri in previousCompressedUris) {
-                    context.contentResolver.delete(uri, null, null)
+            val finalUris =
+                if (config.enableCompression) {
+                    onLoadingChanged(true)
+                    val processed =
+                        try {
+                            toCompress.map { source ->
+                                compressionOutputOrOriginal(source, compressImage(context, source, config))
+                            }
+                        } finally {
+                            onLoadingChanged(false)
+                        }
+                    // Delete only intermediate crops that compression actually replaced. A crop
+                    // whose compression failed is now the fallback result and must stay readable.
+                    deleteOwnedFiles(context, cropped.filterNot(processed::contains))
+                    processed
+                } else {
+                    toCompress
                 }
-                previousCompressedUris = compressed
-                onImagesPicked(compressed)
-            } else {
-                onImagesPicked(toCompress)
-            }
+
+            // Track only files the library created. In particular, a gallery URI used as a
+            // compression fallback must never enter this list or a later pick would delete it.
+            val ownedFinalUris =
+                finalUris.filter { uri ->
+                    uri in cropped || uri in libraryOwnedInputs || uri !in toCompress
+                }
+            deleteOwnedFiles(context, previousOwnedUris.filterNot(finalUris::contains))
+            previousOwnedUris = ownedFinalUris
+            onImagesPicked(finalUris)
+            return finalUris
         } finally {
             isProcessing = false
         }
@@ -195,14 +209,14 @@ fun rememberImagePickerLauncher(
             val capturedUri = tempCameraUri
             if (success && capturedUri != null) {
                 coroutineScope.launch {
-                    processPicked(listOf(capturedUri))
-                    // Compression (if enabled) superseded this raw capture with a new file that's
-                    // now tracked in previousCompressedUris - the raw temp file is otherwise never
-                    // cleaned up and would leak in cacheDir. Leave it alone when compression is
-                    // disabled: capturedUri is then the live selection handed to onImagesPicked.
-                    if (config.enableCompression) {
+                    val finalUris = processPicked(listOf(capturedUri), setOf(capturedUri))
+                    // Delete the raw capture only when a crop/compression output replaced it, or
+                    // the operation was cancelled. If compression failed, capturedUri is the
+                    // fallback result and must remain readable by the caller.
+                    if (capturedUri !in finalUris) {
                         context.contentResolver.delete(capturedUri, null, null)
                     }
+                    tempCameraUri = null
                 }
             } else {
                 // Capture was cancelled/failed - clean up the temp file we created for it.
@@ -326,6 +340,12 @@ internal fun pickerMaxItems(
 
 /** The first [max] items, or all of them when there is no limit. */
 internal fun <T> List<T>.limitedTo(max: Int?): List<T> = if (max == null) this else take(max)
+
+/** Uses a successfully processed output, otherwise preserves the original input as a fallback. */
+internal fun <T> compressionOutputOrOriginal(
+    original: T,
+    output: T?,
+): T = output ?: original
 
 /** The most items Android's Photo Picker lets one request ask for, or no limit where it isn't available. */
 private fun systemPickLimit(): Int = runCatching { platformPickLimit() }.getOrDefault(Int.MAX_VALUE)
