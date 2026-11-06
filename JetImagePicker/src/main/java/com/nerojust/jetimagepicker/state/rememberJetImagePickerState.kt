@@ -1,25 +1,18 @@
 package com.nerojust.jetimagepicker.state
 
 import android.content.Context
-import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.nerojust.jetimagepicker.config.JetImagePickerConfig
-import com.nerojust.jetimagepicker.launchers.rememberImagePickerLauncher
+import com.nerojust.jetimagepicker.launchers.deleteOwnedFiles
+import com.nerojust.jetimagepicker.launchers.rememberImagePickerLauncherWithResults
 import com.nerojust.jetimagepicker.result.ImagePickerResult
 import com.nerojust.jetimagepicker.result.toImagePickerResult
-
-private val UriListSaver =
-    listSaver<List<Uri>, String>(
-        save = { list -> list.map(Uri::toString) },
-        restore = { saved -> saved.map(Uri::parse) },
-    )
 
 /**
  * Creates and remembers a [JetImagePickerState] for picking images from the gallery or capturing
@@ -39,13 +32,16 @@ fun rememberJetImagePickerState(
         mutableStateOf(emptyList())
     }
     var isLoading by remember { mutableStateOf(false) }
+    var ownedUris by rememberSaveable(stateSaver = UriListSaver) { mutableStateOf(emptyList()) }
+
+    OwnedFileCleanup(context, ownedUris)
 
     val selectedImageUris = remember { derivedStateOf { selectedUris } }
     val selectedImageUri = remember { derivedStateOf { selectedUris.firstOrNull() } }
     val loadingState = remember { derivedStateOf { isLoading } }
 
     val (launchGallery, launchCamera) =
-        rememberImagePickerLauncher(
+        rememberImagePickerLauncherWithResults(
             context = context,
             config = config,
             onImagesPicked = { uris ->
@@ -56,6 +52,9 @@ fun rememberJetImagePickerState(
                 permissionState.toImagePickerResult()?.let(onResult)
             },
             onLoadingChanged = { loading -> isLoading = loading },
+            onCancelled = { onResult(ImagePickerResult.Cancelled) },
+            onError = onResult,
+            onOwnedUrisChanged = { ownedUris = it },
         )
 
     return JetImagePickerState(
@@ -64,6 +63,10 @@ fun rememberJetImagePickerState(
         _isLoading = loadingState,
         pickFromGallery = launchGallery,
         captureWithCamera = launchCamera,
-        clearSelection = { selectedUris = emptyList() },
+        clearSelection = {
+            deleteOwnedFiles(context, ownedUris)
+            ownedUris = emptyList()
+            selectedUris = emptyList()
+        },
     )
 }

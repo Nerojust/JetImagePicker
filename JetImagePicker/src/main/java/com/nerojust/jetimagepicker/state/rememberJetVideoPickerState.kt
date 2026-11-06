@@ -11,7 +11,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.nerojust.jetimagepicker.config.JetVideoPickerConfig
 import com.nerojust.jetimagepicker.launchers.NullableUriSaver
-import com.nerojust.jetimagepicker.launchers.rememberVideoPickerLauncher
+import com.nerojust.jetimagepicker.launchers.deleteOwnedFiles
+import com.nerojust.jetimagepicker.launchers.rememberVideoPickerLauncherWithResults
 import com.nerojust.jetimagepicker.result.VideoPickerResult
 
 /**
@@ -33,12 +34,15 @@ fun rememberJetVideoPickerState(
         mutableStateOf<Uri?>(null)
     }
     var isLoading by remember { mutableStateOf(false) }
+    var ownedUris by rememberSaveable(stateSaver = UriListSaver) { mutableStateOf(emptyList()) }
+
+    OwnedFileCleanup(context, ownedUris)
 
     val selectedVideoUri = remember { derivedStateOf { selectedUri } }
     val loadingState = remember { derivedStateOf { isLoading } }
 
     val (launchGallery, launchCamera) =
-        rememberVideoPickerLauncher(
+        rememberVideoPickerLauncherWithResults(
             context = context,
             config = config,
             onVideoPicked = { uri, thumbnailUri ->
@@ -52,6 +56,9 @@ fun rememberJetVideoPickerState(
                 onResult(permissionsRequired)
             },
             onLoadingChanged = { loading -> isLoading = loading },
+            onCancelled = { onResult(VideoPickerResult.Cancelled) },
+            onError = onResult,
+            onOwnedUrisChanged = { ownedUris = it },
         )
 
     return JetVideoPickerState(
@@ -59,6 +66,10 @@ fun rememberJetVideoPickerState(
         _isLoading = loadingState,
         pickFromGallery = launchGallery,
         captureWithCamera = launchCamera,
-        clearSelection = { selectedUri = null },
+        clearSelection = {
+            deleteOwnedFiles(context, ownedUris)
+            ownedUris = emptyList()
+            selectedUri = null
+        },
     )
 }

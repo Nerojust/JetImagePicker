@@ -42,6 +42,8 @@ data class JetImagePickerConfig(
     val outputFormat: ImageOutputFormat = ImageOutputFormat.JPEG,
 ) {
     init {
+        require(targetWidth == null || targetWidth > 0) { "targetWidth must be greater than 0, was $targetWidth" }
+        require(targetHeight == null || targetHeight > 0) { "targetHeight must be greater than 0, was $targetHeight" }
         require(maxSelection == null || maxSelection >= 1) { "maxSelection must be at least 1, was $maxSelection" }
     }
 }

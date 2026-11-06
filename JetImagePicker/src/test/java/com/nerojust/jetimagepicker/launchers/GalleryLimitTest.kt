@@ -56,4 +56,40 @@ class GalleryLimitTest {
         assertEquals(picked, picked.limitedTo(null))
         assertEquals(emptyList<String>(), emptyList<String>().limitedTo(3))
     }
+
+    @Test
+    fun `successful compression uses its output`() {
+        assertEquals("compressed", compressionOutputOrOriginal("original", "compressed"))
+    }
+
+    @Test
+    fun `failed compression preserves the original`() {
+        assertEquals("original", compressionOutputOrOriginal("original", null))
+    }
+
+    @Test
+    fun `gallery fallback is not treated as library owned`() {
+        assertEquals(
+            emptyList<String>(),
+            ownedImageResults(
+                finalResults = listOf("gallery"),
+                croppedResults = emptyList(),
+                libraryOwnedInputs = emptySet(),
+                processingInputs = listOf("gallery"),
+            ),
+        )
+    }
+
+    @Test
+    fun `camera fallback and compressed outputs are library owned`() {
+        assertEquals(
+            listOf("camera", "compressed"),
+            ownedImageResults(
+                finalResults = listOf("camera", "compressed"),
+                croppedResults = emptyList(),
+                libraryOwnedInputs = setOf("camera"),
+                processingInputs = listOf("camera", "gallery"),
+            ),
+        )
+    }
 }

@@ -54,4 +54,23 @@ class JetImagePickerConfigTest {
         assertEquals("jpg", ImageOutputFormat.JPEG.extension)
         assertEquals("webp", ImageOutputFormat.WEBP.extension)
     }
+
+    @Test
+    fun `compression quality remains permissive because processing clamps it`() {
+        assertEquals(101, JetImagePickerConfig(compressionQuality = 101).compressionQuality)
+        assertEquals(-1, JetImagePickerConfig(compressionQuality = -1).compressionQuality)
+    }
+
+    @Test
+    fun `only one target dimension remains supported for compatibility`() {
+        val config = JetImagePickerConfig(targetWidth = 100)
+
+        assertEquals(100, config.targetWidth)
+        assertNull(config.targetHeight)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `non-positive target dimensions are rejected`() {
+        JetImagePickerConfig(targetWidth = 0, targetHeight = 100)
+    }
 }

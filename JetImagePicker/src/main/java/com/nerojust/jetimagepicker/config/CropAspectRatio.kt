@@ -11,7 +11,12 @@ sealed class CropAspectRatio {
     data object Square : CropAspectRatio()
 
     /** An arbitrary width:height ratio, e.g. `Custom(16f, 9f)` for 16:9. */
-    data class Custom(val ratioX: Float, val ratioY: Float) : CropAspectRatio()
+    data class Custom(val ratioX: Float, val ratioY: Float) : CropAspectRatio() {
+        init {
+            require(ratioX.isFinite() && ratioX > 0f) { "ratioX must be finite and greater than 0, was $ratioX" }
+            require(ratioY.isFinite() && ratioY > 0f) { "ratioY must be finite and greater than 0, was $ratioY" }
+        }
+    }
 }
 
 /** The numeric width/height ratio for this [CropAspectRatio], or `null` if unconstrained. */
