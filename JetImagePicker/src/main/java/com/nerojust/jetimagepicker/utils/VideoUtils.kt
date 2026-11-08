@@ -49,39 +49,14 @@ internal object VideoUtils {
     /** Creates a new empty cache file for a CameraX video recording. */
     fun createVideoFile(context: Context): File =
         File(
-            context.cacheDir,
+            Utils.pickerCacheDir(context),
             "VID_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.mp4",
         )
 
     /**
-     * Reads the duration of the video at [uri] in whole seconds, or `null` if it can't be read.
-     * Runs on [Dispatchers.IO] — [MediaMetadataRetriever] reads the file and can block for a
-     * noticeable time on a large video.
-     */
-    suspend fun getVideoDurationSeconds(
-        context: Context,
-        uri: Uri,
-    ): Long? =
-        withContext(Dispatchers.IO) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, uri)
-                retriever
-                    .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    ?.toLongOrNull()
-                    ?.let { it / MILLIS_PER_SECOND }
-            } catch (e: Exception) {
-                Log.e("JetImagePicker", "Failed to read video duration", e)
-                null
-            } finally {
-                retriever.release()
-            }
-        }
-
-    /**
      * Reads the duration of the video at [uri] in milliseconds, or `null` if it can't be read.
-     * Millisecond precision (unlike [getVideoDurationSeconds]'s whole-second truncation) is
-     * needed to size a trim range slider correctly. Runs on [Dispatchers.IO].
+     * Runs on [Dispatchers.IO] — [MediaMetadataRetriever] can block for a noticeable time on a
+     * large video.
      */
     suspend fun getVideoDurationMillis(
         context: Context,
@@ -113,13 +88,13 @@ internal object VideoUtils {
         durationMs: Long,
     ): Boolean = startMs >= 0 && endMs - startMs >= MILLIS_PER_SECOND && endMs <= durationMs
 
-    /** True if [durationSeconds] is known and exceeds [limitSeconds]; false if either is null. */
+    /** True if [durationMillis] is known and exceeds [limitSeconds]; false if either is null. */
     fun isDurationExceeded(
-        durationSeconds: Long?,
+        durationMillis: Long?,
         limitSeconds: Int?,
     ): Boolean {
-        if (durationSeconds == null || limitSeconds == null) return false
-        return durationSeconds > limitSeconds
+        if (durationMillis == null || limitSeconds == null) return false
+        return durationMillis > limitSeconds * MILLIS_PER_SECOND
     }
 
     /**
@@ -230,7 +205,10 @@ internal object VideoUtils {
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val outputFile =
-                    File(context.cacheDir, "COMP_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4")
+                    File(
+                        Utils.pickerCacheDir(context),
+                        "COMP_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4",
+                    )
                 val transformer =
                     Transformer.Builder(context)
                         // Without an explicit target codec, Transformer takes a lossless
@@ -326,7 +304,10 @@ internal object VideoUtils {
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val outputFile =
-                    File(context.cacheDir, "TRIM_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4")
+                    File(
+                        Utils.pickerCacheDir(context),
+                        "TRIM_VIDEO_${System.currentTimeMillis()}_${UUID.randomUUID()}.mp4",
+                    )
                 val clippedMediaItem =
                     MediaItem.Builder()
                         .setUri(uri)

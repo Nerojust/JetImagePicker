@@ -28,12 +28,35 @@ import java.util.UUID
  */
 object Utils {
     private const val MAX_QUALITY = 100
+    internal const val STALE_PICKER_CACHE_AGE_MILLIS = 24L * 60 * 60 * 1000
+    private const val PICKER_CACHE_DIR = "jetimagepicker"
+
+    /**
+     * The folder every library-created file lives in. Keeping them out of the cache root means
+     * cleanup can never touch the host app's own cache files.
+     */
+    internal fun pickerCacheDir(context: Context): File = File(context.cacheDir, PICKER_CACHE_DIR).apply { mkdirs() }
+
+    /** Removes abandoned picker outputs left behind when Android kills the process without lifecycle callbacks. */
+    internal fun pruneStalePickerCache(
+        context: Context,
+        nowMillis: Long = System.currentTimeMillis(),
+        maxAgeMillis: Long = STALE_PICKER_CACHE_AGE_MILLIS,
+    ): Int {
+        require(maxAgeMillis >= 0) { "maxAgeMillis must not be negative" }
+        val cutoff = nowMillis - maxAgeMillis
+        return pickerCacheDir(context).listFiles()
+            ?.asSequence()
+            ?.filter { file -> file.isFile && file.lastModified() <= cutoff }
+            ?.count { file -> file.delete() }
+            ?: 0
+    }
 
     /** Creates a new empty cache file for a camera capture and returns its [FileProvider] URI. */
     fun createImageUri(context: Context): Uri {
         val file =
             File(
-                context.cacheDir,
+                pickerCacheDir(context),
                 "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.jpg",
             )
         return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
@@ -178,7 +201,7 @@ object Utils {
                 // millisecond (e.g. multi-select), silently overwriting one with another.
                 val format = config.outputFormat
                 val filename = "COMP_${System.currentTimeMillis()}_${UUID.randomUUID()}.${format.extension}"
-                val file = File(context.cacheDir, filename)
+                val file = File(pickerCacheDir(context), filename)
                 FileOutputStream(file).use {
                     resized.compress(format.toCompressFormat(), config.compressionQuality.coerceIn(0, MAX_QUALITY), it)
                 }
@@ -206,7 +229,7 @@ object Utils {
     ): Uri? =
         try {
             val filename = "${filenamePrefix}_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg"
-            val file = File(context.cacheDir, filename)
+            val file = File(pickerCacheDir(context), filename)
             FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, MAX_QUALITY, it) }
             FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         } catch (e: Exception) {

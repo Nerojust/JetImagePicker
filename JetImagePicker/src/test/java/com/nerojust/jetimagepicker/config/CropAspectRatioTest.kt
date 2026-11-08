@@ -20,4 +20,14 @@ class CropAspectRatioTest {
         val ratio = CropAspectRatio.Custom(ratioX = 16f, ratioY = 9f).toRatioOrNull()
         assertEquals(16f / 9f, ratio!!, 0.0001f)
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `zero custom ratio is rejected`() {
+        CropAspectRatio.Custom(ratioX = 0f, ratioY = 1f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `non-finite custom ratio is rejected`() {
+        CropAspectRatio.Custom(ratioX = Float.POSITIVE_INFINITY, ratioY = 1f)
+    }
 }

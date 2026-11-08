@@ -9,6 +9,12 @@ sealed class ImagePickerResult {
     /** One or more images were successfully picked or captured. */
     data class Success(val uris: List<Uri>) : ImagePickerResult()
 
+    /** The user dismissed the picker, camera, or crop flow without selecting an image. */
+    data object Cancelled : ImagePickerResult()
+
+    /** The operation could not complete. [message] is suitable for logging or user feedback. */
+    data class Error(val message: String) : ImagePickerResult()
+
     /** [permission] was denied for this request; it can still be requested again. */
     data class PermissionDenied(val permission: String) : ImagePickerResult()
 
